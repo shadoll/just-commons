@@ -40,6 +40,7 @@ _detect_compose:
     fi
 
 # Environment detection and validation
+[group: 'environment']
 env-check:
     #!/usr/bin/env bash
     set -euo pipefail

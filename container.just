@@ -1,6 +1,7 @@
 # Universal container management operations
 
 # Start service (or all services if no service specified)
+[group: 'container']
 start service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -26,6 +27,7 @@ start service="" compose-file="":
     fi
 
 # Stop service (or all services if no service specified)
+[group: 'container']
 stop service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -51,6 +53,7 @@ stop service="" compose-file="":
     fi
 
 # Restart service (or all services if no service specified)
+[group: 'container']
 restart service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -75,6 +78,7 @@ restart service="" compose-file="":
     fi
 
 # Show service status (specific service or all)
+[group: 'container']
 status service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -98,6 +102,7 @@ status service="" compose-file="":
     fi
 
 # View logs for specific service or all services
+[group: 'container']
 logs service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -121,6 +126,7 @@ logs service="" compose-file="":
     fi
 
 # Open shell in specific container
+[group: 'container']
 shell service compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -139,6 +145,7 @@ shell service compose-file="":
     $compose_cmd $file_arg exec "$service" /bin/bash
 
 # Execute command in specific service container
+[group: 'container']
 exec service cmd compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail

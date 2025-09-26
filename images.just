@@ -1,6 +1,7 @@
 # Universal image operations - works for any project
 
 # Build any project's container image
+[group: 'images']
 image-build project *args="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -57,6 +58,7 @@ image-build project *args="":
     echo -e "${GREEN}✓ Local tags: $project:$tag, $project:latest${NC}"
 
 # Push any project's image to registry
+[group: 'images']
 image-push project tag=DEFAULT_TAG:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -131,6 +133,7 @@ image-push project tag=DEFAULT_TAG:
     fi
 
 # Pull any project's image from registry
+[group: 'images']
 image-pull project tag=DEFAULT_TAG:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -283,6 +286,7 @@ image-info project tag="latest":
     fi
 
 # List all project images
+[group: 'images']
 images-list:
     #!/usr/bin/env bash
     set -euo pipefail

@@ -244,3 +244,88 @@ mysql-shell service="mysql" compose-file="":
     else
         just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD}"
     fi
+
+# Restore MySQL database from backup file
+[group: 'database']
+mysql-restore backup_file database service="mysql" compose-file="" backup_path="./backups":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    backup_file="{{backup_file}}"
+    database="{{database}}"
+    service="{{service}}"
+    compose_file="{{compose-file}}"
+    backup_path="{{backup_path}}"
+
+    if [ -z "$backup_file" ] || [ -z "$database" ]; then
+        echo "Error: Backup file and database name are required" >&2
+        echo "Usage: just mysql-restore backup_file.sql database_name" >&2
+        exit 1
+    fi
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="$compose_file"
+    fi
+
+    # Check if backup file exists
+    if [ ! -f "$backup_path/$backup_file" ]; then
+        echo -e "{{RED}}Error: Backup file '$backup_path/$backup_file' not found{{NC}}" >&2
+        echo -e "{{YELLOW}}Available backups:{{NC}}"
+        ls -la "$backup_path/" 2>/dev/null || echo "No backups directory found at $backup_path"
+        exit 1
+    fi
+
+    # Display backup file info
+    echo -e "{{BLUE}}Backup file information:{{NC}}"
+    echo -e "{{YELLOW}}File:{{NC}} $backup_path/$backup_file"
+    echo -e "{{YELLOW}}Size:{{NC}} $(du -h "$backup_path/$backup_file" | cut -f1)"
+    echo -e "{{YELLOW}}Modified:{{NC}} $(stat -c %y "$backup_path/$backup_file" 2>/dev/null || stat -f %Sm "$backup_path/$backup_file")"
+    echo ""
+
+    # Detect backup type
+    if [[ "$backup_file" == *.gz ]]; then
+        backup_type="gzipped SQL"
+        echo -e "{{BLUE}}Backup type:{{NC}} $backup_type"
+    else
+        backup_type="plain SQL"
+        echo -e "{{BLUE}}Backup type:{{NC}} $backup_type"
+    fi
+
+    echo -e "{{BLUE}}Target database:{{NC}} $database"
+    echo -e "{{BLUE}}Target service:{{NC}} $service"
+    echo ""
+
+    echo -e "{{RED}}⚠️  WARNING: This will OVERWRITE the current database!{{NC}}"
+    echo -e "{{YELLOW}}This action will replace all data in '$database' database{{NC}}"
+    echo -e "{{YELLOW}}Make sure you have a backup of current data if needed{{NC}}"
+    echo ""
+
+    read -p "Are you sure you want to restore '$database' from '$backup_file'? Type 'yes' to continue: " confirm
+
+    if [ "$confirm" != "yes" ]; then
+        echo "Restore cancelled"
+        exit 1
+    fi
+
+    echo -e "{{BLUE}}Restoring database '$database' from $backup_file...{{NC}}"
+
+    # Restore database from backup file
+    if [[ "$backup_file" == *.gz ]]; then
+        # For gzipped files
+        if [ -n "$file_arg" ]; then
+            just exec "$service" "gunzip -c /backups/$backup_file | mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database" "$file_arg"
+        else
+            just exec "$service" "gunzip -c /backups/$backup_file | mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database"
+        fi
+    else
+        # For plain SQL files
+        if [ -n "$file_arg" ]; then
+            just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database < /backups/$backup_file" "$file_arg"
+        else
+            just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database < /backups/$backup_file"
+        fi
+    fi
+
+    echo -e "{{GREEN}}✓ Database '$database' restored successfully from $backup_file{{NC}}"

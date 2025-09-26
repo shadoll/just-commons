@@ -1,24 +1,28 @@
 # Universal volume management operations
 
-# Clean all volumes (DESTRUCTIVE!)
+# Clean all volumes used by compose file (DESTRUCTIVE!)
 [group: 'volumes']
-volumes-clean-all project_prefix compose-file="compose.yml":
+volumes-clean-all compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    project_prefix="{{project_prefix}}"
     compose_file="{{compose-file}}"
-
-    if [ -z "$project_prefix" ]; then
-        echo "Error: Project prefix is required" >&2
-        echo "Usage: just volumes-clean-all myproject" >&2
-        exit 1
-    fi
-
     compose_cmd=$(just _detect_compose)
 
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
+
     echo -e "{{RED}}⚠️  WARNING: This will DELETE ALL DATA!{{NC}}"
-    echo -e "{{YELLOW}}This will remove all volumes: postgres_data, postgres_lib, servapp_data, servapp_logs{{NC}}"
+    echo -e "{{YELLOW}}This will remove all volumes defined in the compose file{{NC}}"
+
+    # Show which volumes would be removed
+    echo -e "{{BLUE}}Volumes that will be removed:{{NC}}"
+    $compose_cmd $file_arg config --volumes 2>/dev/null || echo "Cannot list volumes from compose file"
+    echo ""
+
     read -p "Are you sure? Type 'yes' to continue: " confirm
 
     if [ "$confirm" != "yes" ]; then
@@ -27,31 +31,37 @@ volumes-clean-all project_prefix compose-file="compose.yml":
     fi
 
     echo -e "{{BLUE}}Stopping services...{{NC}}"
-    $compose_cmd -f "$compose_file" down
+    $compose_cmd $file_arg down
 
     echo -e "{{BLUE}}Removing volumes...{{NC}}"
-    $compose_cmd -f "$compose_file" down -v
+    $compose_cmd $file_arg down -v
 
     echo -e "{{GREEN}}✓ All volumes removed{{NC}}"
 
-# Clean only PostgreSQL data volume (DESTRUCTIVE!)
+# Remove specific volume by name (DESTRUCTIVE!)
 [group: 'volumes']
-volumes-clean-postgres project_prefix:
+volumes-remove volume_name:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    project_prefix="{{project_prefix}}"
+    volume_name="{{volume_name}}"
 
-    if [ -z "$project_prefix" ]; then
-        echo "Error: Project prefix is required" >&2
-        echo "Usage: just volumes-clean-postgres myproject" >&2
+    if [ -z "$volume_name" ]; then
+        echo "Error: Volume name is required" >&2
+        echo "Usage: just volumes-remove my_volume_name" >&2
         exit 1
     fi
 
     runtime=$(just _detect_runtime)
 
-    echo -e "{{RED}}⚠️  WARNING: This will DELETE PostgreSQL DATA!{{NC}}"
-    echo -e "{{YELLOW}}This will remove postgres_data and postgres_lib volumes{{NC}}"
+    # Check if volume exists
+    if ! $runtime volume ls --format "table {{.Name}}" | grep -q "^${volume_name}$"; then
+        echo -e "{{YELLOW}}Volume '$volume_name' does not exist{{NC}}"
+        exit 0
+    fi
+
+    echo -e "{{RED}}⚠️  WARNING: This will DELETE VOLUME DATA!{{NC}}"
+    echo -e "{{YELLOW}}This will remove volume: $volume_name{{NC}}"
     read -p "Are you sure? Type 'yes' to continue: " confirm
 
     if [ "$confirm" != "yes" ]; then
@@ -59,41 +69,39 @@ volumes-clean-postgres project_prefix:
         exit 1
     fi
 
-    echo -e "{{BLUE}}Stopping PostgreSQL service...{{NC}}"
-    just stop
+    echo -e "{{BLUE}}Removing volume: $volume_name{{NC}}"
+    $runtime volume rm "$volume_name" 2>/dev/null || true
 
-    echo -e "{{BLUE}}Removing PostgreSQL volumes...{{NC}}"
-    $runtime volume rm servass_${project_prefix}_postgres_data servass_${project_prefix}_postgres_lib 2>/dev/null || true
+    echo -e "{{GREEN}}✓ Volume '$volume_name' removed{{NC}}"
 
-    echo -e "{{GREEN}}✓ PostgreSQL volumes removed{{NC}}"
-    echo -e "{{YELLOW}}Run 'just start' to create fresh PostgreSQL instance{{NC}}"
-
-# Clean only ServApp data volume (DESTRUCTIVE!)
+# Remove volumes matching pattern (DESTRUCTIVE!)
 [group: 'volumes']
-volumes-clean-servapp project_prefix app_container compose-file="compose.yml":
+volumes-remove-pattern pattern:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    project_prefix="{{project_prefix}}"
-    app_container="{{app_container}}"
-    compose_file="{{compose-file}}"
+    pattern="{{pattern}}"
 
-    if [ -z "$project_prefix" ]; then
-        echo "Error: Project prefix is required" >&2
-        echo "Usage: just volumes-clean-servapp myproject myapp" >&2
-        exit 1
-    fi
-
-    if [ -z "$app_container" ]; then
-        echo "Error: App container name is required" >&2
-        echo "Usage: just volumes-clean-servapp myproject myapp" >&2
+    if [ -z "$pattern" ]; then
+        echo "Error: Volume pattern is required" >&2
+        echo "Usage: just volumes-remove-pattern 'myproject_*'" >&2
         exit 1
     fi
 
     runtime=$(just _detect_runtime)
 
-    echo -e "{{RED}}⚠️  WARNING: This will DELETE ServApp DATA!{{NC}}"
-    echo -e "{{YELLOW}}This will remove servapp_data and servapp_logs volumes{{NC}}"
+    # Find matching volumes
+    matching_volumes=$($runtime volume ls --format "table {{.Name}}" | grep "$pattern" || true)
+
+    if [ -z "$matching_volumes" ]; then
+        echo -e "{{YELLOW}}No volumes found matching pattern: $pattern{{NC}}"
+        exit 0
+    fi
+
+    echo -e "{{RED}}⚠️  WARNING: This will DELETE VOLUME DATA!{{NC}}"
+    echo -e "{{YELLOW}}Volumes matching pattern '$pattern':{{NC}}"
+    echo "$matching_volumes"
+    echo ""
     read -p "Are you sure? Type 'yes' to continue: " confirm
 
     if [ "$confirm" != "yes" ]; then
@@ -101,31 +109,29 @@ volumes-clean-servapp project_prefix app_container compose-file="compose.yml":
         exit 1
     fi
 
-    echo -e "{{BLUE}}Stopping ServApp service...{{NC}}"
-    compose_cmd=$(just _detect_compose)
-    $compose_cmd -f "$compose_file" stop "$app_container"
+    echo -e "{{BLUE}}Removing matching volumes...{{NC}}"
+    echo "$matching_volumes" | while IFS= read -r volume; do
+        if [ -n "$volume" ]; then
+            echo "Removing: $volume"
+            $runtime volume rm "$volume" 2>/dev/null || true
+        fi
+    done
 
-    echo -e "{{BLUE}}Removing ServApp volumes...{{NC}}"
-    $runtime volume rm servass_${project_prefix}_servapp_data servass_${project_prefix}_servapp_logs 2>/dev/null || true
+    echo -e "{{GREEN}}✓ Matching volumes removed{{NC}}"
 
-    echo -e "{{GREEN}}✓ ServApp volumes removed{{NC}}"
-    echo -e "{{YELLOW}}Run 'just start' to recreate ServApp with fresh data{{NC}}"
-
-# List project volumes
+# List all volumes or filter by pattern
 [group: 'volumes']
-volumes-list project_prefix:
+volumes-list pattern="":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    project_prefix="{{project_prefix}}"
-
-    if [ -z "$project_prefix" ]; then
-        echo "Error: Project prefix is required" >&2
-        echo "Usage: just volumes-list myproject" >&2
-        exit 1
-    fi
-
+    pattern="{{pattern}}"
     runtime=$(just _detect_runtime)
 
-    echo -e "{{BLUE}}Project volumes:{{NC}}"
-    $runtime volume ls | grep "servass_${project_prefix}" || echo "No servass_${project_prefix} volumes found"
+    if [ -n "$pattern" ]; then
+        echo -e "{{BLUE}}Volumes matching pattern '$pattern':{{NC}}"
+        $runtime volume ls | grep "$pattern" || echo "No volumes found matching pattern: $pattern"
+    else
+        echo -e "{{BLUE}}All volumes:{{NC}}"
+        $runtime volume ls
+    fi
