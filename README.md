@@ -27,9 +27,10 @@ import 'just-commons/container.just'   # Container operations
 import 'just-commons/registry.just'    # Registry authentication
 import 'just-commons/images.just'      # Image operations
 
-# Import database commands (optional)
+# Import database and volume commands (optional)
 import 'just-commons/postgres.just'    # PostgreSQL operations
 import 'just-commons/mysql.just'       # MySQL operations
+import 'just-commons/volumes.just'     # Volume management
 ```
 
 ## Files
@@ -43,6 +44,9 @@ import 'just-commons/mysql.just'       # MySQL operations
 ### Database Files (Optional)
 - `postgres.just` - PostgreSQL operations (postgres-sql, postgres-check, postgres-list-databases, etc.)
 - `mysql.just` - MySQL operations (mysql-sql, mysql-check, mysql-list-databases, etc.)
+
+### Volume Management (Optional)
+- `volumes.just` - Volume operations (volumes-clean-all, volumes-remove, volumes-list, etc.)
 
 ### Command Structure
 - **Container commands**: No prefix (start, stop, logs, shell, exec, status, restart)
@@ -68,10 +72,41 @@ just registry-check
 just postgres-sql "SELECT version();"
 just postgres-check
 just mysql-sql "SELECT VERSION();"
+
+# Volume operations (volumes- prefix)
+just volumes-list "myproject_*"
+just volumes-clean-all
+just volumes-remove "old_volume"
 ```
 
 ## Requirements
 
-- Just command runner
+### Just Command Runner
+
+This library requires **Just 1.14.0 or later** to support the `group` attribute for organized command display.
+
+#### Installation on Ubuntu 24.04 LTS
+
+**Method 1: Snap (Recommended for latest version)**
+```bash
+sudo snap install just --classic
+```
+
+**Method 2: Manual Installation from GitHub**
+```bash
+# Get the latest version
+JUST_VERSION=$(curl -s "https://api.github.com/repos/casey/just/releases/latest" | grep -Po '"tag_name": "\K[0-9.]+')
+
+# Download and install
+wget -qO just.tar.gz "https://github.com/casey/just/releases/latest/download/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+tar -xzf just.tar.gz
+sudo mv just /usr/local/bin/
+chmod +x /usr/local/bin/just
+
+# Verify installation
+just --version
+```
+
+### Other Requirements
 - Docker or Podman
 - Git

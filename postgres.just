@@ -131,6 +131,8 @@ postgres-create-database database service="postgres" compose-file="":
     fi
 
 # Drop PostgreSQL database
+[group('database')]
+[confirm]
 postgres-drop-database database service="postgres" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -152,18 +154,12 @@ postgres-drop-database database service="postgres" compose-file="":
     fi
 
     echo -e "{{YELLOW}}WARNING: This will permanently delete database: $database{{NC}}"
-    read -p "Are you sure? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "{{BLUE}}Dropping PostgreSQL database: $database{{NC}}"
+    echo -e "{{BLUE}}Dropping PostgreSQL database: $database{{NC}}"
 
-        if [ -n "$file_arg" ]; then
-            just exec "$service" "dropdb -U postgres \"$database\"" "$file_arg"
-        else
-            just exec "$service" "dropdb -U postgres \"$database\""
-        fi
+    if [ -n "$file_arg" ]; then
+        just exec "$service" "dropdb -U postgres \"$database\"" "$file_arg"
     else
-        echo "Operation cancelled"
+        just exec "$service" "dropdb -U postgres \"$database\""
     fi
 
 # PostgreSQL interactive shell
@@ -190,6 +186,7 @@ postgres-shell service="postgres" compose-file="":
 
 # Restore PostgreSQL database from backup file
 [group('database')]
+[confirm]
 postgres-restore backup_file service="postgres" compose-file="" backup_path="./backups":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -242,13 +239,6 @@ postgres-restore backup_file service="postgres" compose-file="" backup_path="./b
     echo -e "{{YELLOW}}This action will replace all data in the target database{{NC}}"
     echo -e "{{YELLOW}}Make sure you have a backup of current data if needed{{NC}}"
     echo ""
-
-    read -p "Are you sure you want to restore from '$backup_file'? Type 'yes' to continue: " confirm
-
-    if [ "$confirm" != "yes" ]; then
-        echo "Restore cancelled"
-        exit 1
-    fi
 
     echo -e "{{BLUE}}Restoring database from $backup_file...{{NC}}"
 

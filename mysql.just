@@ -128,6 +128,7 @@ mysql-create-database database service="mysql" compose-file="":
     fi
 
 # Drop MySQL database
+[confirm]
 mysql-drop-database database service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -149,18 +150,12 @@ mysql-drop-database database service="mysql" compose-file="":
     fi
 
     echo -e "{{YELLOW}}WARNING: This will permanently delete database: $database{{NC}}"
-    read -p "Are you sure? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "{{BLUE}}Dropping MySQL database: $database{{NC}}"
+    echo -e "{{BLUE}}Dropping MySQL database: $database{{NC}}"
 
-        if [ -n "$file_arg" ]; then
-            just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'DROP DATABASE \`$database\`;'" "$file_arg"
-        else
-            just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'DROP DATABASE \`$database\`;'"
-        fi
+    if [ -n "$file_arg" ]; then
+        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'DROP DATABASE \`$database\`;'" "$file_arg"
     else
-        echo "Operation cancelled"
+        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'DROP DATABASE \`$database\`;'"
     fi
 
 # Create MySQL user
@@ -247,6 +242,7 @@ mysql-shell service="mysql" compose-file="":
 
 # Restore MySQL database from backup file
 [group('database')]
+[confirm]
 mysql-restore backup_file database service="mysql" compose-file="" backup_path="./backups":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -301,13 +297,6 @@ mysql-restore backup_file database service="mysql" compose-file="" backup_path="
     echo -e "{{YELLOW}}This action will replace all data in '$database' database{{NC}}"
     echo -e "{{YELLOW}}Make sure you have a backup of current data if needed{{NC}}"
     echo ""
-
-    read -p "Are you sure you want to restore '$database' from '$backup_file'? Type 'yes' to continue: " confirm
-
-    if [ "$confirm" != "yes" ]; then
-        echo "Restore cancelled"
-        exit 1
-    fi
 
     echo -e "{{BLUE}}Restoring database '$database' from $backup_file...{{NC}}"
 
