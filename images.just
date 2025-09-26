@@ -1,17 +1,5 @@
 # Universal image operations - works for any project
 
-# Detect container runtime
-_detect_runtime:
-    #!/usr/bin/env bash
-    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        echo "docker"
-    elif command -v podman >/dev/null 2>&1; then
-        echo "podman"
-    else
-        echo "Error: No container runtime available (docker or podman)" >&2
-        exit 1
-    fi
-
 # Build any project's container image
 build project *args="":
     #!/usr/bin/env bash
