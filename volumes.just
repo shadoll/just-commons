@@ -55,7 +55,7 @@ volumes-remove volume_name:
     runtime=$(just _detect_runtime)
 
     # Check if volume exists
-    if ! $runtime volume ls --format "table {{.Name}}" | grep -q "^${volume_name}$"; then
+    if ! $runtime volume ls --format "table {{{{.Name}}}}" | grep -q "^${volume_name}$"; then
         echo -e "{{YELLOW}}Volume '$volume_name' does not exist{{NC}}"
         exit 0
     fi
@@ -91,7 +91,7 @@ volumes-remove-pattern pattern:
     runtime=$(just _detect_runtime)
 
     # Find matching volumes
-    matching_volumes=$($runtime volume ls --format "table {{.Name}}" | grep "$pattern" || true)
+    matching_volumes=$($runtime volume ls --format "table {{{{.Name}}}}" | grep "$pattern" || true)
 
     if [ -z "$matching_volumes" ]; then
         echo -e "{{YELLOW}}No volumes found matching pattern: $pattern{{NC}}"
