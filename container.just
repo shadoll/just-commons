@@ -1,127 +1,158 @@
 # Universal container management operations
 
 # Start service (or all services if no service specified)
-start service="":
+start service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
+    compose_file="{{compose-file}}"
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Starting service: $service{{NC}}"
-        $compose_cmd -f compose.yml up -d "$service"
+        $compose_cmd $file_arg up -d "$service"
         echo -e "{{GREEN}}✓ Service $service started{{NC}}"
     else
         echo -e "{{BLUE}}Starting all services...{{NC}}"
-        $compose_cmd -f compose.yml up -d
+        $compose_cmd $file_arg up -d
         echo -e "{{GREEN}}✓ All services started{{NC}}"
     fi
 
 # Stop service (or all services if no service specified)
-stop service="":
+stop service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
+    compose_file="{{compose-file}}"
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Stopping service: $service{{NC}}"
-        $compose_cmd -f compose.yml stop "$service"
+        $compose_cmd $file_arg stop "$service"
         echo -e "{{GREEN}}✓ Service $service stopped{{NC}}"
     else
         echo -e "{{BLUE}}Stopping all services...{{NC}}"
-        $compose_cmd -f compose.yml down
+        $compose_cmd $file_arg down
         echo -e "{{GREEN}}✓ All services stopped{{NC}}"
     fi
 
 # Restart service (or all services if no service specified)
-restart service="":
+restart service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
+    compose_file="{{compose-file}}"
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Restarting service: $service{{NC}}"
-        $compose_cmd -f compose.yml restart "$service"
+        $compose_cmd $file_arg restart "$service"
         echo -e "{{GREEN}}✓ Service $service restarted{{NC}}"
     else
-        just stop
-        just start
+        just stop "$service" "$compose_file"
+        just start "$service" "$compose_file"
     fi
 
 # Show service status (specific service or all)
-status service="":
+status service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
+    compose_file="{{compose-file}}"
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Status for: $service{{NC}}"
-        $compose_cmd -f compose.yml ps "$service"
+        $compose_cmd $file_arg ps "$service"
     else
         echo -e "{{BLUE}}Service Status:{{NC}}"
-        $compose_cmd -f compose.yml ps
+        $compose_cmd $file_arg ps
     fi
 
 # View logs for specific service or all services
-logs service="":
+logs service="" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
+    compose_file="{{compose-file}}"
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Showing logs for: $service{{NC}}"
-        $compose_cmd -f compose.yml logs -f "$service"
+        $compose_cmd $file_arg logs -f "$service"
     else
         echo -e "{{BLUE}}Showing logs for all services{{NC}}"
-        $compose_cmd -f compose.yml logs -f
+        $compose_cmd $file_arg logs -f
     fi
 
 # Open shell in specific container
-shell service:
+shell service compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
+    compose_file="{{compose-file}}"
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
 
     echo -e "{{BLUE}}Opening shell in: $service{{NC}}"
-    $compose_cmd -f compose.yml exec "$service" /bin/bash
+    $compose_cmd $file_arg exec "$service" /bin/bash
 
 # Execute command in specific service container
-exec service cmd:
+exec service cmd compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
     cmd="{{cmd}}"
+    compose_file="{{compose-file}}"
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
 
     echo -e "{{BLUE}}Executing in $service: $cmd{{NC}}"
-    $compose_cmd -f compose.yml exec "$service" bash -c "$cmd"
-
-# Pull latest images for specific service or all services
-pull service="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    compose_cmd=$(just _detect_compose)
-    service="{{service}}"
-
-    if [ -n "$service" ]; then
-        echo -e "{{BLUE}}Pulling image for: $service{{NC}}"
-        $compose_cmd -f compose.yml pull "$service"
-        echo -e "{{GREEN}}✓ Image updated for $service{{NC}}"
-    else
-        echo -e "{{BLUE}}Pulling all images...{{NC}}"
-        $compose_cmd -f compose.yml pull
-        echo -e "{{GREEN}}✓ All images updated{{NC}}"
-    fi
+    $compose_cmd $file_arg exec "$service" bash -c "$cmd"

@@ -1,7 +1,7 @@
 # Universal image operations - works for any project
 
 # Build any project's container image
-build project *args="":
+image-build project *args="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -57,7 +57,7 @@ build project *args="":
     echo -e "${GREEN}✓ Local tags: $project:$tag, $project:latest${NC}"
 
 # Push any project's image to registry
-push project tag=DEFAULT_TAG:
+image-push project tag=DEFAULT_TAG:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -131,7 +131,7 @@ push project tag=DEFAULT_TAG:
     fi
 
 # Pull any project's image from registry
-pull project tag=DEFAULT_TAG:
+image-pull project tag=DEFAULT_TAG:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -176,7 +176,7 @@ pull project tag=DEFAULT_TAG:
     echo -e "${GREEN}✓ Tagged locally as: $project:$tag${NC}"
 
 # Tag any project's existing image
-tag project new_tag:
+image-tag project new_tag:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -206,7 +206,7 @@ tag project new_tag:
     fi
 
 # Test any project's image
-test project tag="latest":
+image-test project tag="latest":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -226,7 +226,7 @@ test project tag="latest":
     # Check if image exists
     if ! $runtime images "$project:$tag" | grep -q "$project"; then
         echo -e "${RED}Error: Image $project:$tag not found${NC}" >&2
-        echo "Build it first with: just build $project $tag" >&2
+        echo "Build it first with: just image-build $project $tag" >&2
         exit 1
     fi
 
@@ -254,7 +254,7 @@ test project tag="latest":
     echo -e "${GREEN}✓ $project image test completed${NC}"
 
 # Show any project's image information
-info project tag="latest":
+image-info project tag="latest":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -279,11 +279,11 @@ info project tag="latest":
         $runtime history "$project:$tag" | head -10
     else
         echo "Image $project:$tag not found locally"
-        echo "Build it with: just build $project $tag"
+        echo "Build it with: just image-build $project $tag"
     fi
 
 # List all project images
-list:
+images-list:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -312,7 +312,7 @@ list:
     fi
 
 # Remove any project's local images
-clean project:
+image-clean project:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -357,15 +357,15 @@ clean project:
     echo -e "${GREEN}✓ Cleaned local images for: $project${NC}"
 
 # Quick build all known projects
-build-all:
+images-build-all:
     @echo "{{BLUE}}Building all known projects...{{NC}}"
-    @just build postgres
-    @just build servapp
+    @just image-build postgres
+    @just image-build servapp
     @echo "{{GREEN}}✓ All projects built successfully{{NC}}"
 
 # Quick push all known projects
-push-all tag=DEFAULT_TAG:
+images-push-all tag=DEFAULT_TAG:
     @echo "{{BLUE}}Pushing all known projects with tag: {{tag}}{{NC}}"
-    @just push postgres {{tag}}
-    @just push servapp {{tag}}
+    @just image-push postgres {{tag}}
+    @just image-push servapp {{tag}}
     @echo "{{GREEN}}✓ All projects pushed successfully{{NC}}"
