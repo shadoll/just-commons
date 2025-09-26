@@ -1,7 +1,7 @@
 # Universal PostgreSQL database operations
 
 # Execute PostgreSQL SQL query
-[group: 'database']
+[group('database')]
 postgres-sql query service="postgres" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -32,7 +32,7 @@ postgres-sql query service="postgres" compose-file="":
     fi
 
 # Check PostgreSQL connection and status
-[group: 'database']
+[group('database')]
 postgres-check service="postgres" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -57,7 +57,7 @@ postgres-check service="postgres" compose-file="":
     fi
 
 # List PostgreSQL databases
-[group: 'database']
+[group('database')]
 postgres-list-databases service="postgres" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -189,7 +189,7 @@ postgres-shell service="postgres" compose-file="":
     fi
 
 # Restore PostgreSQL database from backup file
-[group: 'database']
+[group('database')]
 postgres-restore backup_file service="postgres" compose-file="" backup_path="./backups":
     #!/usr/bin/env bash
     set -euo pipefail

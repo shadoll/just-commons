@@ -246,7 +246,7 @@ mysql-shell service="mysql" compose-file="":
     fi
 
 # Restore MySQL database from backup file
-[group: 'database']
+[group('database')]
 mysql-restore backup_file database service="mysql" compose-file="" backup_path="./backups":
     #!/usr/bin/env bash
     set -euo pipefail

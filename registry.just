@@ -1,7 +1,7 @@
 # Registry operations
 
 # Login to container registry
-[group: 'registry']
+[group('registry')]
 registry-login:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -49,7 +49,7 @@ registry-login:
     fi
 
 # Logout from container registry
-[group: 'registry']
+[group('registry')]
 registry-logout:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -69,7 +69,7 @@ registry-logout:
 
 
 # Check authentication and registry status
-[group: 'registry']
+[group('registry')]
 registry-check:
     #!/usr/bin/env bash
     set -euo pipefail
