@@ -45,12 +45,6 @@ env-check:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Colors
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
-    NC='\033[0m'
 
     echo "================================================"
     echo "  Container Environment Detection"
@@ -60,23 +54,23 @@ env-check:
     # Check Docker
     if command -v docker >/dev/null 2>&1; then
         if docker info >/dev/null 2>&1; then
-            echo -e "${GREEN}✓ Docker Engine detected and running${NC}"
+            echo -e "{{GREEN}}✓ Docker Engine detected and running{{NORMAL}}"
             docker_available=true
         else
-            echo -e "${YELLOW}⚠ Docker is installed but daemon is not running${NC}"
+            echo -e "{{YELLOW}}⚠ Docker is installed but daemon is not running{{NORMAL}}"
             docker_available=false
         fi
     else
-        echo -e "${RED}✗ Docker not found${NC}"
+        echo -e "{{RED}}✗ Docker not found{{NORMAL}}"
         docker_available=false
     fi
 
     # Check Podman
     if command -v podman >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ Podman detected${NC}"
+        echo -e "{{GREEN}}✓ Podman detected{{NORMAL}}"
         podman_available=true
     else
-        echo -e "${RED}✗ Podman not found${NC}"
+        echo -e "{{RED}}✗ Podman not found{{NORMAL}}"
         podman_available=false
     fi
 
@@ -86,14 +80,14 @@ env-check:
     echo "================================================"
 
     if [ "$docker_available" = true ] || [ "$podman_available" = true ]; then
-        echo -e "${GREEN}🎉 Container runtime available!${NC}"
+        echo -e "{{GREEN}}🎉 Container runtime available!{{NORMAL}}"
         echo ""
         echo "You can use these universal commands:"
-        echo "  just build <project>        # Build any project image"
-        echo "  just start <service>        # Start any service"
-        echo "  just registry-login         # Login to registry"
+        echo "  just images build <project>   # Build any project image"
+        echo "  just container start <service> # Start any service"
+        echo "  just registry login           # Login to registry"
     else
-        echo -e "${RED}❌ No container runtime available${NC}"
+        echo -e "{{RED}}❌ No container runtime available{{NORMAL}}"
         echo ""
         echo "Please install Docker or Podman:"
         echo "  • Docker: https://docs.docker.com/get-docker/"
