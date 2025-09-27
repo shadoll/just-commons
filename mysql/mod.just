@@ -1,7 +1,6 @@
 # Universal MySQL database operations
 
 # Execute MySQL SQL query
-[group('database')]
 sql query service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -32,7 +31,6 @@ sql query service="mysql" compose-file="":
     fi
 
 # Check MySQL connection and status
-[group('database')]
 check service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -57,7 +55,6 @@ check service="mysql" compose-file="":
     fi
 
 # List MySQL databases
-[group('database')]
 list-databases service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -80,7 +77,6 @@ list-databases service="mysql" compose-file="":
     fi
 
 # List MySQL users
-[group('database')]
 list-users service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -103,7 +99,6 @@ list-users service="mysql" compose-file="":
     fi
 
 # Create MySQL database
-[group('database')]
 create-database database service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -133,7 +128,6 @@ create-database database service="mysql" compose-file="":
     fi
 
 # Drop MySQL database
-[group('database')]
 [confirm]
 drop-database database service="mysql" compose-file="":
     #!/usr/bin/env bash
@@ -165,7 +159,6 @@ drop-database database service="mysql" compose-file="":
     fi
 
 # Create MySQL user
-[group('database')]
 create-user username password service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -196,7 +189,6 @@ create-user username password service="mysql" compose-file="":
     fi
 
 # Grant MySQL privileges
-[group('database')]
 grant-privileges database username service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -227,7 +219,6 @@ grant-privileges database username service="mysql" compose-file="":
     fi
 
 # MySQL interactive shell
-[group('database')]
 shell service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -250,7 +241,6 @@ shell service="mysql" compose-file="":
     fi
 
 # Restore MySQL database from backup file
-[group('database')]
 [confirm]
 restore backup_file database service="mysql" compose-file="" backup_path="./backups":
     #!/usr/bin/env bash

@@ -1,7 +1,6 @@
 # Universal container image operations
 
 # Build project image
-[group('images')]
 build project tag="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -59,7 +58,6 @@ build project tag="":
     echo -e "{{GREEN}}✓ Successfully built: $image_name{{NORMAL}}"
 
 # Push project image to registry
-[group('images')]
 push project tag="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -100,7 +98,6 @@ push project tag="":
     echo -e "{{GREEN}}✓ Successfully pushed: $image_name{{NORMAL}}"
 
 # Pull project image from registry
-[group('images')]
 pull project tag="latest":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -132,7 +129,6 @@ pull project tag="latest":
     echo -e "{{GREEN}}✓ Successfully pulled: $image_name{{NORMAL}}"
 
 # Tag existing image
-[group('images')]
 tag project new_tag:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -172,7 +168,6 @@ tag project new_tag:
     echo -e "{{GREEN}}✓ Successfully tagged: $new_image{{NORMAL}}"
 
 # Show image information
-[group('images')]
 info project tag="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -213,7 +208,6 @@ info project tag="":
     $runtime history "$image_name" 2>/dev/null || echo "Image not found locally"
 
 # Remove project images
-[group('images')]
 [confirm]
 clean project:
     #!/usr/bin/env bash
@@ -261,7 +255,6 @@ clean project:
     echo -e "{{GREEN}}✓ Project images cleaned{{NORMAL}}"
 
 # Build all known projects
-[group('images')]
 build-all:
     #!/usr/bin/env bash
     set -euo pipefail

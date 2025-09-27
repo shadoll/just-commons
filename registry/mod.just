@@ -1,7 +1,6 @@
 # Container registry authentication and management
 
 # Login to container registry
-[group('registry')]
 login:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -21,7 +20,6 @@ login:
     echo -e "{{GREEN}}✓ Successfully logged into $registry{{NORMAL}}"
 
 # Logout from container registry
-[group('registry')]
 logout:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -35,7 +33,6 @@ logout:
     echo -e "{{GREEN}}✓ Successfully logged out from $registry{{NORMAL}}"
 
 # Check registry authentication status
-[group('registry')]
 check:
     #!/usr/bin/env bash
     set -euo pipefail

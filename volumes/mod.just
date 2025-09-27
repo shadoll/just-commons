@@ -1,7 +1,6 @@
 # Universal volume management operations
 
 # Clean all volumes used by compose file (DESTRUCTIVE!)
-[group('volumes')]
 [confirm]
 clean-all compose-file="":
     #!/usr/bin/env bash
@@ -33,7 +32,6 @@ clean-all compose-file="":
     echo -e "{{GREEN}}✓ All volumes removed{{NORMAL}}"
 
 # Remove specific volume by name (DESTRUCTIVE!)
-[group('volumes')]
 [confirm]
 remove volume_name:
     #!/usr/bin/env bash
@@ -64,7 +62,6 @@ remove volume_name:
     echo -e "{{GREEN}}✓ Volume '$volume_name' removed{{NORMAL}}"
 
 # Remove volumes matching pattern (DESTRUCTIVE!)
-[group('volumes')]
 [confirm]
 remove-pattern pattern:
     #!/usr/bin/env bash
@@ -104,7 +101,6 @@ remove-pattern pattern:
     echo -e "{{GREEN}}✓ Matching volumes removed{{NORMAL}}"
 
 # List all volumes or filter by pattern
-[group('volumes')]
 list pattern="":
     #!/usr/bin/env bash
     set -euo pipefail

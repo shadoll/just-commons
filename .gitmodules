@@ -1,0 +1,3 @@
+[submodule "just-commons"]
+	path = just-commons
+	url = https://github.com/shadoll/just-commons.git
