@@ -1,6 +1,7 @@
 # Universal MySQL database operations
 
 # Execute MySQL SQL query
+[no-cd]
 sql query service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -8,12 +9,6 @@ sql query service="mysql" compose-file="":
     query="{{query}}"
     service="{{service}}"
     compose_file="{{compose-file}}"
-
-    if [ -z "$query" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} SQL query is required" >&2
-        echo "{{YELLOW}}Usage:{{NORMAL}} just mysql sql \"SELECT VERSION();\"" >&2
-        exit 1
-    fi
 
     # Build compose file argument
     file_arg=""
@@ -25,12 +20,13 @@ sql query service="mysql" compose-file="":
     echo -e "{{YELLOW}}Query: $query{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"$query\"" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"$query\"" "$file_arg"
     else
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"$query\""
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"$query\""
     fi
 
 # Check MySQL connection and status
+[no-cd]
 check service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -47,14 +43,15 @@ check service="mysql" compose-file="":
     echo -e "{{BLUE}}Checking MySQL status in service: $service{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysqladmin -u root -p\${MYSQL_ROOT_PASSWORD} ping" "$file_arg"
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SELECT VERSION();'" "$file_arg"
+        just container exec "$service" "mysqladmin -u root -p\${MYSQL_ROOT_PASSWORD} ping" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SELECT VERSION();'" "$file_arg"
     else
-        just exec "$service" "mysqladmin -u root -p\${MYSQL_ROOT_PASSWORD} ping"
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SELECT VERSION();'"
+        just container exec "$service" "mysqladmin -u root -p\${MYSQL_ROOT_PASSWORD} ping"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SELECT VERSION();'"
     fi
 
 # List MySQL databases
+[no-cd]
 list-databases service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -71,12 +68,13 @@ list-databases service="mysql" compose-file="":
     echo -e "{{BLUE}}Listing MySQL databases in service: $service{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SHOW DATABASES;'" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SHOW DATABASES;'" "$file_arg"
     else
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SHOW DATABASES;'"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SHOW DATABASES;'"
     fi
 
 # List MySQL users
+[no-cd]
 list-users service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -93,12 +91,13 @@ list-users service="mysql" compose-file="":
     echo -e "{{BLUE}}Listing MySQL users in service: $service{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SELECT User, Host FROM mysql.user;'" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SELECT User, Host FROM mysql.user;'" "$file_arg"
     else
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SELECT User, Host FROM mysql.user;'"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'SELECT User, Host FROM mysql.user;'"
     fi
 
 # Create MySQL database
+[no-cd]
 create-database database service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -122,13 +121,14 @@ create-database database service="mysql" compose-file="":
     echo -e "{{BLUE}}Creating MySQL database: $database{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'CREATE DATABASE \`$database\`;'" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'CREATE DATABASE \`$database\`;'" "$file_arg"
     else
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'CREATE DATABASE \`$database\`;'"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'CREATE DATABASE \`$database\`;'"
     fi
 
 # Drop MySQL database
 [confirm]
+[no-cd]
 drop-database database service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -153,12 +153,13 @@ drop-database database service="mysql" compose-file="":
     echo -e "{{BLUE}}Dropping MySQL database: $database{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'DROP DATABASE \`$database\`;'" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'DROP DATABASE \`$database\`;'" "$file_arg"
     else
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'DROP DATABASE \`$database\`;'"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e 'DROP DATABASE \`$database\`;'"
     fi
 
 # Create MySQL user
+[no-cd]
 create-user username password service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -183,12 +184,13 @@ create-user username password service="mysql" compose-file="":
     echo -e "{{BLUE}}Creating MySQL user: $username{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"CREATE USER '$username'@'%' IDENTIFIED BY '$password';\"" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"CREATE USER '$username'@'%' IDENTIFIED BY '$password';\"" "$file_arg"
     else
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"CREATE USER '$username'@'%' IDENTIFIED BY '$password';\""
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"CREATE USER '$username'@'%' IDENTIFIED BY '$password';\""
     fi
 
 # Grant MySQL privileges
+[no-cd]
 grant-privileges database username service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -213,12 +215,13 @@ grant-privileges database username service="mysql" compose-file="":
     echo -e "{{BLUE}}Granting privileges on $database to $username{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"GRANT ALL PRIVILEGES ON \\\`$database\\\`.* TO '$username'@'%'; FLUSH PRIVILEGES;\"" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"GRANT ALL PRIVILEGES ON \\\`$database\\\`.* TO '$username'@'%'; FLUSH PRIVILEGES;\"" "$file_arg"
     else
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"GRANT ALL PRIVILEGES ON \\\`$database\\\`.* TO '$username'@'%'; FLUSH PRIVILEGES;\""
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} -e \"GRANT ALL PRIVILEGES ON \\\`$database\\\`.* TO '$username'@'%'; FLUSH PRIVILEGES;\""
     fi
 
 # MySQL interactive shell
+[no-cd]
 shell service="mysql" compose-file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -235,13 +238,63 @@ shell service="mysql" compose-file="":
     echo -e "{{BLUE}}Opening MySQL interactive shell in service: $service{{NORMAL}}"
 
     if [ -n "$file_arg" ]; then
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD}" "$file_arg"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD}" "$file_arg"
     else
-        just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD}"
+        just container exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD}"
+    fi
+
+# Create MySQL database backup
+[no-cd]
+backup database service="mysql" compose-file="" backup_path="./backups" backup_name="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    database="{{database}}"
+    service="{{service}}"
+    compose_file="{{compose-file}}"
+    backup_path="{{backup_path}}"
+    backup_name="{{backup_name}}"
+
+    echo -e "{{BLUE}}💾 Creating MySQL database backup...{{NORMAL}}"
+    echo -e "{{YELLOW}}Database: $database, Service: $service, Path: $backup_path{{NORMAL}}"
+
+    # Create backup directory
+    mkdir -p "$backup_path"
+
+    # Generate backup filename
+    if [ -n "$backup_name" ]; then
+        backup_file="${backup_path}/${backup_name}.sql.gz"
+    else
+        timestamp=$(date +%Y%m%d_%H%M%S)
+        backup_file="${backup_path}/${database}_${timestamp}.sql.gz"
+    fi
+
+    echo -e "{{BLUE}}Creating MySQL backup for database: $database{{NORMAL}}"
+    echo -e "{{YELLOW}}Backup file: $backup_file{{NORMAL}}"
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="$compose_file"
+    fi
+
+    # Create backup
+    if [ -n "$file_arg" ]; then
+        just container exec "$service" "mysqldump --single-transaction --routines --triggers -u root -p\${MYSQL_ROOT_PASSWORD} $database" "$file_arg" | gzip > "$backup_file"
+    else
+        just container exec "$service" "mysqldump --single-transaction --routines --triggers -u root -p\${MYSQL_ROOT_PASSWORD} $database" | gzip > "$backup_file"
+    fi
+
+    if [ $? -eq 0 ]; then
+        echo -e "{{GREEN}}✓ Database backup completed: $backup_file{{NORMAL}}"
+    else
+        echo -e "{{RED}}❌ Database backup failed{{NORMAL}}"
+        exit 1
     fi
 
 # Restore MySQL database from backup file
 [confirm]
+[no-cd]
 restore backup_file database service="mysql" compose-file="" backup_path="./backups":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -251,6 +304,9 @@ restore backup_file database service="mysql" compose-file="" backup_path="./back
     service="{{service}}"
     compose_file="{{compose-file}}"
     backup_path="{{backup_path}}"
+
+    echo -e "{{BLUE}}🔄 Restoring MySQL database from backup...{{NORMAL}}"
+    echo -e "{{YELLOW}}Backup: $backup_file, Database: $database, Service: $service{{NORMAL}}"
 
     if [ -z "$backup_file" ] || [ -z "$database" ]; then
         echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Backup file and database name are required" >&2
@@ -301,18 +357,18 @@ restore backup_file database service="mysql" compose-file="" backup_path="./back
 
     # Restore database from backup file
     if [[ "$backup_file" == *.gz ]]; then
-        # For gzipped files
+        # For gzipped files - pipe from host to container
         if [ -n "$file_arg" ]; then
-            just exec "$service" "gunzip -c /backups/$backup_file | mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database" "$file_arg"
+            gunzip -c "$backup_path/$backup_file" | just container exec-pipe "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database" "$file_arg"
         else
-            just exec "$service" "gunzip -c /backups/$backup_file | mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database"
+            gunzip -c "$backup_path/$backup_file" | just container exec-pipe "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database"
         fi
     else
-        # For plain SQL files
+        # For plain SQL files - pipe from host to container
         if [ -n "$file_arg" ]; then
-            just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database < /backups/$backup_file" "$file_arg"
+            cat "$backup_path/$backup_file" | just container exec-pipe "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database" "$file_arg"
         else
-            just exec "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database < /backups/$backup_file"
+            cat "$backup_path/$backup_file" | just container exec-pipe "$service" "mysql -u root -p\${MYSQL_ROOT_PASSWORD} $database"
         fi
     fi
 
