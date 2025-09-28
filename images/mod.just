@@ -3,150 +3,84 @@
 
 # Build project image with multi-architecture support
 [no-cd]
-build project="" tag="" local="false":
+build project="" tag="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     project="{{project}}"
     tag="{{tag}}"
-    local="{{local}}"
 
-    # Determine discovery directory and project
+    # Auto-discover project if not specified
     if [ -z "$project" ]; then
-        discovery_dir="."
         echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
         project=$(just _get_project_name)
         echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
-    else
-        # Check if project directory exists
-        if [ ! -d "$project" ]; then
-            echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project directory '$project' not found" >&2
-            exit 1
-        fi
-        discovery_dir="$project"
-        echo -e "{{BLUE}}🔍 Building project: $project{{NORMAL}}"
     fi
-
-    # Use unified discovery logic
-    discovery_result=$(just _discover_containerfile_in "$discovery_dir")
-    read -r containerfile discovered_project build_context <<< "$discovery_result"
-
-    echo -e "{{GREEN}}✓ Found $containerfile{{NORMAL}}"
 
     # Generate tag if not provided
     if [ -z "$tag" ]; then
         tag=$(just _generate_default_tag)
     fi
 
-    # Get image name using new naming logic
+    # Auto-discover containerfile
+    containerfile_info=$(just _discover_containerfile)
+    read -r containerfile project_name build_context <<< "$containerfile_info"
+
+    echo -e "{{GREEN}}✓ Found $containerfile{{NORMAL}}"
+
+    # Build image
     image_name=$(just _get_image_name "$tag")
-
-    # Detect platforms
-    platforms=$(just _detect_platforms "$containerfile")
-
     echo -e "{{BLUE}}Building image: $image_name{{NORMAL}}"
     echo -e "{{YELLOW}}Using: $containerfile{{NORMAL}}"
     echo -e "{{YELLOW}}Build context: $build_context{{NORMAL}}"
+
+    # Detect platforms
+    platforms=$(just _detect_platforms "$containerfile")
     echo -e "{{YELLOW}}Platforms: $platforms{{NORMAL}}"
 
     runtime=$(just _detect_runtime)
 
-    # Check if multi-platform build is needed
-    if [[ "$platforms" == *","* ]] && [ "$local" != "true" ]; then
-        echo -e "{{BLUE}}Multi-platform build detected: $platforms{{NORMAL}}"
+    # Parse platforms into array
+    IFS=',' read -ra PLATFORM_ARRAY <<< "$platforms"
 
-        # Use buildx for multi-platform
-        if ! $runtime buildx version >/dev/null 2>&1; then
-            echo "{{BOLD}}{{RED}}Error:{{NORMAL}} buildx required for multi-platform builds" >&2
-            echo "{{YELLOW}}Run: $runtime buildx create --use{{NORMAL}}" >&2
-            exit 1
-        fi
+    # Remove any existing manifest or conflicting tags
+    $runtime manifest rm "$image_name" 2>/dev/null || true
+    $runtime rmi "$image_name" 2>/dev/null || true
 
-        # Ensure buildx builder exists and is active
-        if ! $runtime buildx inspect >/dev/null 2>&1; then
-            echo -e "{{BLUE}}Setting up buildx builder...{{NORMAL}}"
-            $runtime buildx create --use --name just-commons-builder >/dev/null 2>&1 || true
-        fi
+    # Build each platform
+    temp_tags=()
+    timestamp=$(date +%s)
 
-        echo -e "{{YELLOW}}Multi-platform builds cannot be loaded locally - will build and push to registry{{NORMAL}}"
-        echo -e "{{BLUE}}Building multi-platform image: $platforms{{NORMAL}}"
+    for platform in "${PLATFORM_ARRAY[@]}"; do
+        echo -e "{{BLUE}}Building for platform: $platform{{NORMAL}}"
 
-        # For podman, build for each platform and create manifest
-        IFS=',' read -ra PLATFORM_ARRAY <<< "$platforms"
+        temp_tag="${image_name}-temp-${timestamp}-${platform//\//-}"
+        temp_tags+=("$temp_tag")
 
-        # For multi-platform builds, build both architectures locally
-        echo -e "{{BLUE}}Building multi-platform image for: $platforms{{NORMAL}}"
+        $runtime buildx build \
+            --platform "$platform" \
+            -f "$containerfile" \
+            -t "$temp_tag" \
+            --load \
+            "$build_context"
+    done
 
-        # First, remove any existing manifest or conflicting tags
-        $runtime manifest rm "$image_name" 2>/dev/null || true
-        $runtime rmi "$image_name" 2>/dev/null || true
-
-        # Build each platform locally with unique temporary tags
-        temp_tags=()
-        timestamp=$(date +%s)
-
-        for platform in "${PLATFORM_ARRAY[@]}"; do
-            echo -e "{{BLUE}}Building for platform: $platform{{NORMAL}}"
-
-            # Create unique temporary tag for this build
-            temp_tag="${image_name}-build-${timestamp}-${platform//\//-}"
-            temp_tags+=("$temp_tag")
-
-            $runtime buildx build \
-                --platform "$platform" \
-                -f "$containerfile" \
-                -t "$temp_tag" \
-                --load \
-                "$build_context"
-        done
-
-        # Create manifest from temporary tags
+    # Create final image (single or multi-platform)
+    if [ ${#PLATFORM_ARRAY[@]} -eq 1 ]; then
+        # Single platform - just tag the image
+        echo -e "{{BLUE}}Tagging single platform image{{NORMAL}}"
+        $runtime tag "${temp_tags[0]}" "$image_name"
+    else
+        # Multi-platform - create manifest
         echo -e "{{BLUE}}Creating multi-platform manifest{{NORMAL}}"
-
         manifest_cmd="$runtime manifest create $image_name"
         for temp_tag in "${temp_tags[@]}"; do
             manifest_cmd="$manifest_cmd $temp_tag"
         done
         eval "$manifest_cmd"
-
-        # Clean up temporary tags
-        for temp_tag in "${temp_tags[@]}"; do
-            $runtime rmi "$temp_tag" 2>/dev/null || true
-        done
-
-        echo -e "{{GREEN}}✓ Multi-platform build completed: $image_name{{NORMAL}}"
-    else
-        if [[ "$platforms" == *","* ]]; then
-            # Local build requested for multi-platform - use local platform only
-            if [ "$(uname -m)" = "x86_64" ]; then
-                local_platform="linux/amd64"
-            elif [ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; then
-                local_platform="linux/arm64"
-            else
-                local_platform="linux/amd64"
-            fi
-            echo -e "{{BLUE}}Local-only build (from multi-platform): $local_platform{{NORMAL}}"
-            platforms="$local_platform"
-        else
-            echo -e "{{BLUE}}Single platform build: $platforms{{NORMAL}}"
-        fi
-
-        # Handle single platform builds with potential platform specification
-        if grep -q "FROM.*--platform" "$containerfile"; then
-            echo -e "{{YELLOW}}Platform specified in Containerfile, using compatibility mode{{NORMAL}}"
-
-            # Create temporary Containerfile without platform specification for local build
-            temp_containerfile="/tmp/Containerfile.local.$$"
-            sed 's/FROM --platform=[^ ]* /FROM /' "$containerfile" > "$temp_containerfile"
-
-            $runtime build -f "$temp_containerfile" -t "$image_name" "$build_context"
-
-            # Clean up temp file
-            rm -f "$temp_containerfile"
-        else
-            $runtime build -f "$containerfile" -t "$image_name" "$build_context"
-        fi
     fi
+
+    # Keep platform images for manifest - don't clean up temp tags
 
     echo -e "{{GREEN}}✓ Successfully built: $image_name{{NORMAL}}"
 
@@ -209,18 +143,41 @@ push project="" tag="":
         # Tag only the latest commit image as latest
         latest_image_name=$(just _get_image_name "latest")
 
-        # First push the commit-tagged image to registry
-        echo -e "{{BLUE}}Pushing commit image: $latest_commit_image{{NORMAL}}"
-        $runtime push "$latest_commit_image"
+        # First push the commit image/manifest
+        if $runtime manifest inspect "$latest_commit_image" >/dev/null 2>&1; then
+            echo -e "{{BLUE}}Pushing multi-platform manifest: $latest_commit_image{{NORMAL}}"
 
-        echo -e "{{BLUE}}📋 Tagging $latest_commit_image as latest{{NORMAL}}"
-        $runtime tag "$latest_commit_image" "$latest_image_name"
+            # For manifests, we need to push all referenced platform images first
+            platform_images=$($runtime manifest inspect "$latest_commit_image" | grep -o '"[^"]*-temp-[^"]*"' | tr -d '"' | sort -u || true)
 
-        echo -e "{{GREEN}}✓ Tagged latest commit image as latest{{NORMAL}}"
+            for platform_image in $platform_images; do
+                if [ -n "$platform_image" ]; then
+                    echo -e "{{BLUE}}Pushing platform image: $platform_image{{NORMAL}}"
+                    $runtime push "$platform_image"
+                fi
+            done
 
-        # Push latest tag
-        echo -e "{{BLUE}}Pushing latest tag: $latest_image_name{{NORMAL}}"
-        $runtime push "$latest_image_name"
+            # Tag the manifest with latest before pushing
+            echo -e "{{BLUE}}📋 Tagging manifest as latest{{NORMAL}}"
+            $runtime tag "$latest_commit_image" "$latest_image_name"
+
+            # Push both tags (they point to the same manifest)
+            echo -e "{{BLUE}}Pushing commit manifest: $latest_commit_image{{NORMAL}}"
+            $runtime manifest push "$latest_commit_image"
+
+            echo -e "{{BLUE}}Pushing latest manifest: $latest_image_name{{NORMAL}}"
+            $runtime manifest push "$latest_image_name"
+        else
+            echo -e "{{BLUE}}Pushing commit image: $latest_commit_image{{NORMAL}}"
+            $runtime push "$latest_commit_image"
+
+            # For regular images, just tag and push
+            echo -e "{{BLUE}}📋 Tagging $latest_commit_image as latest{{NORMAL}}"
+            $runtime tag "$latest_commit_image" "$latest_image_name"
+
+            echo -e "{{BLUE}}Pushing latest tag: $latest_image_name{{NORMAL}}"
+            $runtime push "$latest_image_name"
+        fi
 
         echo -e "{{GREEN}}✓ Successfully pushed both commit and latest tags{{NORMAL}}"
     else
@@ -237,8 +194,26 @@ push project="" tag="":
             exit 1
         fi
 
-        echo -e "{{BLUE}}Pushing image: $image_name{{NORMAL}}"
-        $runtime push "$image_name"
+        # Check if this is a manifest (multi-platform) or regular image
+        if $runtime manifest inspect "$image_name" >/dev/null 2>&1; then
+            echo -e "{{BLUE}}Pushing multi-platform manifest: $image_name{{NORMAL}}"
+
+            # For manifests, we need to push all referenced platform images first
+            platform_images=$($runtime manifest inspect "$image_name" | grep -o '"[^"]*-temp-[^"]*"' | tr -d '"' | sort -u || true)
+
+            for platform_image in $platform_images; do
+                if [ -n "$platform_image" ]; then
+                    echo -e "{{BLUE}}Pushing platform image: $platform_image{{NORMAL}}"
+                    $runtime push "$platform_image"
+                fi
+            done
+
+            # Now push the manifest
+            $runtime manifest push "$image_name"
+        else
+            echo -e "{{BLUE}}Pushing image: $image_name{{NORMAL}}"
+            $runtime push "$image_name"
+        fi
 
         echo -e "{{GREEN}}✓ Successfully pushed: $image_name{{NORMAL}}"
     fi
