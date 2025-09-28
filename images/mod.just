@@ -82,12 +82,14 @@ build project="" tag="" local="false":
         $runtime rmi "$image_name" 2>/dev/null || true
 
         # Build each platform locally with unique temporary tags
-        local temp_tags=()
+        temp_tags=()
+        timestamp=$(date +%s)
+
         for platform in "${PLATFORM_ARRAY[@]}"; do
             echo -e "{{BLUE}}Building for platform: $platform{{NORMAL}}"
 
             # Create unique temporary tag for this build
-            temp_tag="${image_name}-build-$(date +%s)-${platform//\//-}"
+            temp_tag="${image_name}-build-${timestamp}-${platform//\//-}"
             temp_tags+=("$temp_tag")
 
             $runtime buildx build \
