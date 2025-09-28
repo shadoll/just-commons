@@ -1,5 +1,51 @@
 # Core utilities shared across all just-commons modules
 
+# Auto-discover project name from current directory
+_discover_project:
+    #!/usr/bin/env bash
+    echo "$(basename $(pwd))"
+
+# Auto-discover containerfile and return path and project info
+# Usage: _discover_containerfile [directory]
+# Returns: containerfile_path project_name build_context
+_discover_containerfile_in dir="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    dir="{{dir}}"
+    if [ -z "$dir" ]; then
+        dir="."
+    fi
+
+    # Check for Containerfile or Dockerfile in the specified directory
+    if [ -f "$dir/Containerfile" ]; then
+        echo "$dir/Containerfile $(basename $(realpath $dir)) $dir/"
+    elif [ -f "$dir/Dockerfile" ]; then
+        echo "$dir/Dockerfile $(basename $(realpath $dir)) $dir/"
+    # Check ./docker folder (only when dir is current directory)
+    elif [ "$dir" = "." ] && [ -f "docker/Containerfile" ]; then
+        echo "docker/Containerfile $(basename $(pwd)) ."
+    elif [ "$dir" = "." ] && [ -f "docker/Dockerfile" ]; then
+        echo "docker/Dockerfile $(basename $(pwd)) ."
+    else
+        echo "Error: No Containerfile or Dockerfile found in $dir" >&2
+        if [ "$dir" = "." ]; then
+            echo "  - ./Containerfile" >&2
+            echo "  - ./Dockerfile" >&2
+            echo "  - ./docker/Containerfile" >&2
+            echo "  - ./docker/Dockerfile" >&2
+        else
+            echo "  - $dir/Containerfile" >&2
+            echo "  - $dir/Dockerfile" >&2
+        fi
+        exit 1
+    fi
+
+# Auto-discover containerfile from current directory (backward compatibility)
+_discover_containerfile:
+    #!/usr/bin/env bash
+    just _discover_containerfile_in
+
 # Detect container runtime (Docker or Podman)
 _detect_runtime:
     #!/usr/bin/env bash

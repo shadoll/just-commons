@@ -1,35 +1,38 @@
 # Universal container image operations
 
-# Build project image
-build project tag="":
+# Build project image (auto-discovers Dockerfile if project not specified)
+[no-cd]
+build project="" tag="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     project="{{project}}"
     tag="{{tag}}"
 
+    # Determine discovery directory
     if [ -z "$project" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project name is required" >&2
-        echo "{{YELLOW}}Usage:{{NORMAL}} just images build myproject [tag]" >&2
-        exit 1
-    fi
-
-    # Check if project directory exists
-    if [ ! -d "$project" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project directory '$project' not found" >&2
-        exit 1
-    fi
-
-    # Check for Containerfile or Dockerfile
-    containerfile=""
-    if [ -f "$project/Containerfile" ]; then
-        containerfile="$project/Containerfile"
-    elif [ -f "$project/Dockerfile" ]; then
-        containerfile="$project/Dockerfile"
+        discovery_dir="."
+        echo -e "{{BLUE}}🔍 Auto-discovering Dockerfile/Containerfile...{{NORMAL}}"
     else
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} No Containerfile or Dockerfile found in $project/" >&2
-        exit 1
+        # Check if project directory exists
+        if [ ! -d "$project" ]; then
+            echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project directory '$project' not found" >&2
+            exit 1
+        fi
+        discovery_dir="$project"
+        echo -e "{{BLUE}}🔍 Auto-discovering Dockerfile/Containerfile in $project...{{NORMAL}}"
     fi
+
+    # Use unified discovery logic
+    discovery_result=$(just _discover_containerfile_in "$discovery_dir")
+    read -r containerfile discovered_project build_context <<< "$discovery_result"
+
+    # Use discovered project name if not explicitly set
+    if [ -z "$project" ]; then
+        project="$discovered_project"
+    fi
+
+    echo -e "{{GREEN}}✓ Found $containerfile{{NORMAL}}"
 
     # Generate tag if not provided
     if [ -z "$tag" ]; then
@@ -52,23 +55,41 @@ build project tag="":
 
     echo -e "{{BLUE}}Building image: $image_name{{NORMAL}}"
     echo -e "{{YELLOW}}Using: $containerfile{{NORMAL}}"
+    echo -e "{{YELLOW}}Build context: $build_context{{NORMAL}}"
 
-    $runtime build -f "$containerfile" -t "$image_name" "$project/"
+    # Handle cross-platform builds with macOS compatibility workaround
+    if grep -q "FROM.*--platform" "$containerfile"; then
+        echo -e "{{YELLOW}}Cross-platform build detected, using macOS compatibility workaround{{NORMAL}}"
+
+        # Create temporary Containerfile without platform specification for local build
+        temp_containerfile="/tmp/Containerfile.local.$$"
+        sed 's/FROM --platform=[^ ]* /FROM /' "$containerfile" > "$temp_containerfile"
+
+        echo -e "{{BLUE}}Building without platform emulation (will be multi-arch compatible){{NORMAL}}"
+        $runtime build -f "$temp_containerfile" -t "$image_name" --load "$build_context"
+
+        # Clean up temp file
+        rm -f "$temp_containerfile"
+    else
+        $runtime build -f "$containerfile" -t "$image_name" --load "$build_context"
+    fi
 
     echo -e "{{GREEN}}✓ Successfully built: $image_name{{NORMAL}}"
 
 # Push project image to registry
-push project tag="":
+[no-cd]
+push project="" tag="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     project="{{project}}"
     tag="{{tag}}"
 
+    # Auto-discover project if not specified
     if [ -z "$project" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project name is required" >&2
-        echo "{{YELLOW}}Usage:{{NORMAL}} just images push myproject [tag]" >&2
-        exit 1
+        echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
+        project=$(just _discover_project)
+        echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     fi
 
     # Generate tag if not provided
@@ -98,17 +119,19 @@ push project tag="":
     echo -e "{{GREEN}}✓ Successfully pushed: $image_name{{NORMAL}}"
 
 # Pull project image from registry
-pull project tag="latest":
+[no-cd]
+pull project="" tag="latest":
     #!/usr/bin/env bash
     set -euo pipefail
 
     project="{{project}}"
     tag="{{tag}}"
 
+    # Auto-discover project if not specified
     if [ -z "$project" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project name is required" >&2
-        echo "{{YELLOW}}Usage:{{NORMAL}} just images pull myproject [tag]" >&2
-        exit 1
+        echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
+        project=$(just _discover_project)
+        echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     fi
 
     runtime=$(just _detect_runtime)
@@ -129,6 +152,7 @@ pull project tag="latest":
     echo -e "{{GREEN}}✓ Successfully pulled: $image_name{{NORMAL}}"
 
 # Tag existing image
+[no-cd]
 tag project new_tag:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -155,7 +179,7 @@ tag project new_tag:
     fi
 
     # Find the most recent tag for the project
-    latest_image=$($runtime images --format "table {{{{.Repository}}}}:{{{{.Tag}}}}" | grep "^$old_image" | head -1)
+    latest_image=$($runtime images | grep "^$old_image" | awk '{print $1":"$2}' | head -1)
 
     if [ -z "$latest_image" ]; then
         echo "{{BOLD}}{{RED}}Error:{{NORMAL}} No images found for project: $project" >&2
@@ -168,17 +192,19 @@ tag project new_tag:
     echo -e "{{GREEN}}✓ Successfully tagged: $new_image{{NORMAL}}"
 
 # Show image information
-info project tag="":
+[no-cd]
+info project="" tag="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     project="{{project}}"
     tag="{{tag}}"
 
+    # Auto-discover project if not specified
     if [ -z "$project" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project name is required" >&2
-        echo "{{YELLOW}}Usage:{{NORMAL}} just images info myproject [tag]" >&2
-        exit 1
+        echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
+        project=$(just _discover_project)
+        echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     fi
 
     runtime=$(just _detect_runtime)
@@ -197,11 +223,11 @@ info project tag="":
         image_name="$image_base"
     fi
 
-    echo -e "{{BLUE}}Image information for: $image_name{{NORMAL}}"
     echo ""
+    echo -e "{{BLUE}}Image information for: $image_name{{NORMAL}}"
 
     # Show image details
-    $runtime images "$image_name" --format "table {{{{.Repository}}}}\\t{{{{.Tag}}}}\\t{{{{.ID}}}}\\t{{{{.CreatedSince}}}}\\t{{{{.Size}}}}"
+    $runtime images "$image_name"
 
     echo ""
     echo -e "{{BLUE}}Image history:{{NORMAL}}"
@@ -209,16 +235,18 @@ info project tag="":
 
 # Remove project images
 [confirm]
-clean project:
+[no-cd]
+clean project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     project="{{project}}"
 
+    # Auto-discover project if not specified
     if [ -z "$project" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project name is required" >&2
-        echo "{{YELLOW}}Usage:{{NORMAL}} just images clean myproject" >&2
-        exit 1
+        echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
+        project=$(just _discover_project)
+        echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     fi
 
     runtime=$(just _detect_runtime)
@@ -255,33 +283,62 @@ clean project:
     echo -e "{{GREEN}}✓ Project images cleaned{{NORMAL}}"
 
 # Build all known projects
+[no-cd]
 build-all:
     #!/usr/bin/env bash
     set -euo pipefail
 
     echo -e "{{BLUE}}Building all projects with Containerfiles...{{NORMAL}}"
 
-    # Find all directories with Containerfile or Dockerfile
+    # Find all directories with Containerfile or Dockerfile using discovery logic
     projects=""
+
+    # Check current directory first (handles docker/ subfolder case)
+    has_current_project=false
+    if just _discover_containerfile_in "." >/dev/null 2>&1; then
+        current_project=$(just _discover_project)
+        has_current_project=true
+        echo -e "{{GREEN}}✓ Found project in current directory: $current_project{{NORMAL}}"
+    fi
+
+    # Check subdirectories
     for dir in */; do
-        if [ -f "${dir}Containerfile" ] || [ -f "${dir}Dockerfile" ]; then
-            project_name="${dir%/}"
-            projects="$projects $project_name"
+        if [ -d "$dir" ]; then
+            dir_name="${dir%/}"
+            # Skip docker directory to avoid duplicate detection
+            if [ "$dir_name" != "docker" ] && just _discover_containerfile_in "$dir_name" >/dev/null 2>&1; then
+                projects="$projects $dir_name"
+            fi
         fi
     done
 
-    if [ -z "$projects" ]; then
+    if [ -z "$projects" ] && [ "$has_current_project" = false ]; then
         echo -e "{{YELLOW}}No projects with Containerfile/Dockerfile found{{NORMAL}}"
         exit 0
     fi
 
-    echo -e "{{BLUE}}Found projects:$projects{{NORMAL}}"
+    # Show discovered projects
+    if [ "$has_current_project" = true ]; then
+        echo -e "{{BLUE}}Found projects: $current_project (current directory)$projects{{NORMAL}}"
+    else
+        echo -e "{{BLUE}}Found projects:$projects{{NORMAL}}"
+    fi
     echo ""
 
-    for project in $projects; do
-        echo -e "{{CYAN}}Building project: $project{{NORMAL}}"
-        just images build "$project"
+    # Build current project first if found
+    if [ "$has_current_project" = true ]; then
+        echo -e "{{CYAN}}Building project: $current_project (current directory){{NORMAL}}"
+        just images build
         echo ""
+    fi
+
+    # Build subdirectory projects
+    for project in $projects; do
+        if [ -n "$project" ]; then
+            echo -e "{{CYAN}}Building project: $project{{NORMAL}}"
+            just images build "$project"
+            echo ""
+        fi
     done
 
     echo -e "{{GREEN}}✓ All projects built successfully{{NORMAL}}"
