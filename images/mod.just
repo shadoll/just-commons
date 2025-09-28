@@ -1,6 +1,7 @@
-# Universal container image operations
+# Container images module - comprehensive image management
+# Supports multi-architecture builds, flexible naming, and registry operations
 
-# Build project image (auto-discovers Dockerfile if project not specified)
+# Build project image with multi-architecture support
 [no-cd]
 build project="" tag="":
     #!/usr/bin/env bash
@@ -9,10 +10,12 @@ build project="" tag="":
     project="{{project}}"
     tag="{{tag}}"
 
-    # Determine discovery directory
+    # Determine discovery directory and project
     if [ -z "$project" ]; then
         discovery_dir="."
-        echo -e "{{BLUE}}🔍 Auto-discovering Dockerfile/Containerfile...{{NORMAL}}"
+        echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
+        project=$(just _get_project_name)
+        echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     else
         # Check if project directory exists
         if [ ! -d "$project" ]; then
@@ -20,63 +23,90 @@ build project="" tag="":
             exit 1
         fi
         discovery_dir="$project"
-        echo -e "{{BLUE}}🔍 Auto-discovering Dockerfile/Containerfile in $project...{{NORMAL}}"
+        echo -e "{{BLUE}}🔍 Building project: $project{{NORMAL}}"
     fi
 
     # Use unified discovery logic
     discovery_result=$(just _discover_containerfile_in "$discovery_dir")
     read -r containerfile discovered_project build_context <<< "$discovery_result"
 
-    # Use discovered project name if not explicitly set
-    if [ -z "$project" ]; then
-        project="$discovered_project"
-    fi
-
     echo -e "{{GREEN}}✓ Found $containerfile{{NORMAL}}"
 
     # Generate tag if not provided
     if [ -z "$tag" ]; then
-        if git rev-parse --git-dir >/dev/null 2>&1; then
-            tag="commit-$(git rev-parse --short HEAD)"
-        else
-            tag="build-$(date '+%Y%m%d-%H%M%S')"
-        fi
+        tag=$(just _generate_default_tag)
     fi
 
-    runtime=$(just _detect_runtime)
-    registry="${REGISTRY:-ghcr.io}"
-    username="${GITHUB_USERNAME:-}"
+    # Get image name using new naming logic
+    image_name=$(just _get_image_name "$tag")
 
-    if [ -n "$username" ]; then
-        image_name="$registry/$username/$project:$tag"
-    else
-        image_name="$project:$tag"
-    fi
+    # Detect platforms
+    platforms=$(just _detect_platforms "$containerfile")
 
     echo -e "{{BLUE}}Building image: $image_name{{NORMAL}}"
     echo -e "{{YELLOW}}Using: $containerfile{{NORMAL}}"
     echo -e "{{YELLOW}}Build context: $build_context{{NORMAL}}"
+    echo -e "{{YELLOW}}Platforms: $platforms{{NORMAL}}"
 
-    # Handle cross-platform builds with macOS compatibility workaround
-    if grep -q "FROM.*--platform" "$containerfile"; then
-        echo -e "{{YELLOW}}Cross-platform build detected, using macOS compatibility workaround{{NORMAL}}"
+    runtime=$(just _detect_runtime)
 
-        # Create temporary Containerfile without platform specification for local build
-        temp_containerfile="/tmp/Containerfile.local.$$"
-        sed 's/FROM --platform=[^ ]* /FROM /' "$containerfile" > "$temp_containerfile"
+    # Check if multi-platform build is needed
+    if [[ "$platforms" == *","* ]]; then
+        echo -e "{{BLUE}}Multi-platform build detected{{NORMAL}}"
 
-        echo -e "{{BLUE}}Building without platform emulation (will be multi-arch compatible){{NORMAL}}"
-        $runtime build -f "$temp_containerfile" -t "$image_name" --load "$build_context"
+        # Use buildx for multi-platform
+        if ! $runtime buildx version >/dev/null 2>&1; then
+            echo "{{BOLD}}{{RED}}Error:{{NORMAL}} buildx required for multi-platform builds" >&2
+            echo "{{YELLOW}}Run: $runtime buildx create --use{{NORMAL}}" >&2
+            exit 1
+        fi
 
-        # Clean up temp file
-        rm -f "$temp_containerfile"
+        # Ensure buildx builder exists and is active
+        if ! $runtime buildx inspect >/dev/null 2>&1; then
+            echo -e "{{BLUE}}Setting up buildx builder...{{NORMAL}}"
+            $runtime buildx create --use --name just-commons-builder >/dev/null 2>&1 || true
+        fi
+
+        # For multi-platform builds, we can't load locally, so build for local platform only
+        local_platform="linux/$(uname -m)"
+        if [ "$(uname -m)" = "x86_64" ]; then
+            local_platform="linux/amd64"
+        elif [ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; then
+            local_platform="linux/arm64"
+        fi
+
+        echo -e "{{YELLOW}}Multi-platform builds cannot be loaded locally{{NORMAL}}"
+        echo -e "{{BLUE}}Building for local platform: $local_platform{{NORMAL}}"
+
+        $runtime buildx build \
+            --platform "$local_platform" \
+            -f "$containerfile" \
+            -t "$image_name" \
+            --load \
+            "$build_context"
     else
-        $runtime build -f "$containerfile" -t "$image_name" --load "$build_context"
+        echo -e "{{BLUE}}Single platform build{{NORMAL}}"
+
+        # Handle single platform builds with potential platform specification
+        if grep -q "FROM.*--platform" "$containerfile"; then
+            echo -e "{{YELLOW}}Platform specified in Containerfile, using compatibility mode{{NORMAL}}"
+
+            # Create temporary Containerfile without platform specification for local build
+            temp_containerfile="/tmp/Containerfile.local.$$"
+            sed 's/FROM --platform=[^ ]* /FROM /' "$containerfile" > "$temp_containerfile"
+
+            $runtime build -f "$temp_containerfile" -t "$image_name" "$build_context"
+
+            # Clean up temp file
+            rm -f "$temp_containerfile"
+        else
+            $runtime build -f "$containerfile" -t "$image_name" "$build_context"
+        fi
     fi
 
     echo -e "{{GREEN}}✓ Successfully built: $image_name{{NORMAL}}"
 
-# Push project image to registry
+# Push project image to registry with smart latest handling
 [no-cd]
 push project="" tag="":
     #!/usr/bin/env bash
@@ -85,38 +115,84 @@ push project="" tag="":
     project="{{project}}"
     tag="{{tag}}"
 
+    # Handle case where user provides tag without project (e.g., "just images push latest")
+    if [ -n "$project" ] && [ -z "$tag" ] && [[ "$project" =~ ^(latest|commit-.*|[0-9]+\.[0-9]+.*|v[0-9]+.*)$ ]]; then
+        # First parameter looks like a tag, treat it as such
+        tag="$project"
+        project=""
+    fi
+
     # Auto-discover project if not specified
     if [ -z "$project" ]; then
         echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
-        project=$(just _discover_project)
+        project=$(just _get_project_name)
         echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     fi
 
     # Generate tag if not provided
     if [ -z "$tag" ]; then
-        if git rev-parse --git-dir >/dev/null 2>&1; then
-            tag="commit-$(git rev-parse --short HEAD)"
-        else
-            tag="latest"
-        fi
+        tag=$(just _generate_default_tag)
     fi
 
     runtime=$(just _detect_runtime)
-    registry="${REGISTRY:-ghcr.io}"
-    username="${GITHUB_USERNAME:-}"
 
-    if [ -z "$username" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} GITHUB_USERNAME not set" >&2
-        echo "{{YELLOW}}Set GITHUB_USERNAME in .env file{{NORMAL}}" >&2
-        exit 1
+    # Special handling for latest tag
+    if [ "$tag" = "latest" ]; then
+        echo -e "{{BLUE}}🔍 Latest tag requested - finding existing images to tag...{{NORMAL}}"
+
+        # Get base image name without tag
+        image_base=$(just _get_image_name "")
+
+        # Find only commit-tagged images for this project (most recent build)
+        commit_images=$($runtime images | grep "^$image_base" | grep " commit-" | awk '{print $1":"$2}' || true)
+
+        if [ -z "$commit_images" ]; then
+            echo "{{BOLD}}{{RED}}Error:{{NORMAL}} No commit-tagged images found to tag as latest" >&2
+            echo "{{YELLOW}}Build an image first with: just images build{{NORMAL}}" >&2
+            exit 1
+        fi
+
+        # Get the most recent commit image (first in the list since images are sorted by creation time)
+        latest_commit_image=$(echo "$commit_images" | head -1)
+
+        echo -e "{{BLUE}}Found latest commit image: $latest_commit_image{{NORMAL}}"
+
+        # Tag only the latest commit image as latest
+        latest_image_name=$(just _get_image_name "latest")
+
+        # First push the commit-tagged image to registry
+        echo -e "{{BLUE}}Pushing commit image: $latest_commit_image{{NORMAL}}"
+        $runtime push "$latest_commit_image"
+
+        echo -e "{{BLUE}}📋 Tagging $latest_commit_image as latest{{NORMAL}}"
+        $runtime tag "$latest_commit_image" "$latest_image_name"
+
+        echo -e "{{GREEN}}✓ Tagged latest commit image as latest{{NORMAL}}"
+
+        # Push latest tag
+        echo -e "{{BLUE}}Pushing latest tag: $latest_image_name{{NORMAL}}"
+        $runtime push "$latest_image_name"
+
+        echo -e "{{GREEN}}✓ Successfully pushed both commit and latest tags{{NORMAL}}"
+    else
+        # Regular tag push
+        image_name=$(just _get_image_name "$tag")
+
+        # Check if the image exists locally
+        if ! $runtime images "$image_name" >/dev/null 2>&1; then
+            echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Image $image_name not found locally" >&2
+            echo "{{YELLOW}}Build the image first with: just images build{{NORMAL}}" >&2
+            echo "{{YELLOW}}Available images:{{NORMAL}}" >&2
+            image_base=$(just _get_image_name "")
+            $runtime images | grep "$image_base" || echo "No images found for project: $project" >&2
+            exit 1
+        fi
+
+        echo -e "{{BLUE}}Pushing image: $image_name{{NORMAL}}"
+        $runtime push "$image_name"
+
+        echo -e "{{GREEN}}✓ Successfully pushed: $image_name{{NORMAL}}"
     fi
-
-    image_name="$registry/$username/$project:$tag"
-
-    echo -e "{{BLUE}}Pushing image: $image_name{{NORMAL}}"
-    $runtime push "$image_name"
-
-    echo -e "{{GREEN}}✓ Successfully pushed: $image_name{{NORMAL}}"
 
 # Pull project image from registry
 [no-cd]
@@ -130,64 +206,49 @@ pull project="" tag="latest":
     # Auto-discover project if not specified
     if [ -z "$project" ]; then
         echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
-        project=$(just _discover_project)
+        project=$(just _get_project_name)
         echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     fi
 
+    image_name=$(just _get_image_name "$tag")
     runtime=$(just _detect_runtime)
-    registry="${REGISTRY:-ghcr.io}"
-    username="${GITHUB_USERNAME:-}"
-
-    if [ -z "$username" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} GITHUB_USERNAME not set" >&2
-        echo "{{YELLOW}}Set GITHUB_USERNAME in .env file{{NORMAL}}" >&2
-        exit 1
-    fi
-
-    image_name="$registry/$username/$project:$tag"
 
     echo -e "{{BLUE}}Pulling image: $image_name{{NORMAL}}"
     $runtime pull "$image_name"
 
     echo -e "{{GREEN}}✓ Successfully pulled: $image_name{{NORMAL}}"
 
-# Tag existing image
+# Tag existing image with new tag
 [no-cd]
-tag project new_tag:
+tag source_tag new_tag:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    project="{{project}}"
+    source_tag="{{source_tag}}"
     new_tag="{{new_tag}}"
 
-    if [ -z "$project" ] || [ -z "$new_tag" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Project name and new tag are required" >&2
-        echo "{{YELLOW}}Usage:{{NORMAL}} just images tag myproject newtag" >&2
+    if [ -z "$source_tag" ] || [ -z "$new_tag" ]; then
+        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Both source and new tags are required" >&2
+        echo "{{YELLOW}}Usage:{{NORMAL}} just images tag commit-abc123 v1.2.3" >&2
         exit 1
     fi
 
     runtime=$(just _detect_runtime)
-    registry="${REGISTRY:-ghcr.io}"
-    username="${GITHUB_USERNAME:-}"
 
-    if [ -n "$username" ]; then
-        old_image="$registry/$username/$project"
-        new_image="$registry/$username/$project:$new_tag"
-    else
-        old_image="$project"
-        new_image="$project:$new_tag"
-    fi
+    source_image=$(just _get_image_name "$source_tag")
+    new_image=$(just _get_image_name "$new_tag")
 
-    # Find the most recent tag for the project
-    latest_image=$($runtime images | grep "^$old_image" | awk '{print $1":"$2}' | head -1)
-
-    if [ -z "$latest_image" ]; then
-        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} No images found for project: $project" >&2
+    # Check if source image exists
+    if ! $runtime images "$source_image" >/dev/null 2>&1; then
+        echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Source image not found: $source_image" >&2
+        echo "{{YELLOW}}Available images:{{NORMAL}}" >&2
+        image_base=$(just _get_image_name "")
+        $runtime images | grep "$image_base" || echo "No images found" >&2
         exit 1
     fi
 
-    echo -e "{{BLUE}}Tagging image: $latest_image → $new_image{{NORMAL}}"
-    $runtime tag "$latest_image" "$new_image"
+    echo -e "{{BLUE}}Tagging image: $source_image → $new_image{{NORMAL}}"
+    $runtime tag "$source_image" "$new_image"
 
     echo -e "{{GREEN}}✓ Successfully tagged: $new_image{{NORMAL}}"
 
@@ -203,37 +264,73 @@ info project="" tag="":
     # Auto-discover project if not specified
     if [ -z "$project" ]; then
         echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
-        project=$(just _discover_project)
+        project=$(just _get_project_name)
         echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     fi
 
     runtime=$(just _detect_runtime)
-    registry="${REGISTRY:-ghcr.io}"
-    username="${GITHUB_USERNAME:-}"
-
-    if [ -n "$username" ]; then
-        image_base="$registry/$username/$project"
-    else
-        image_base="$project"
-    fi
 
     if [ -n "$tag" ]; then
-        image_name="$image_base:$tag"
+        image_name=$(just _get_image_name "$tag")
     else
-        image_name="$image_base"
+        image_name=$(just _get_image_name "")
     fi
 
     echo ""
     echo -e "{{BLUE}}Image information for: $image_name{{NORMAL}}"
+    echo ""
+    echo -e "{{BLUE}}Configuration:{{NORMAL}}"
+    echo -e "{{YELLOW}}Project:{{NORMAL}} $project"
+    echo -e "{{YELLOW}}Registry:{{NORMAL}} ${REGISTRY:-ghcr.io}"
+    echo -e "{{YELLOW}}Namespace:{{NORMAL}} ${REGISTRY_NAMESPACE:-${GITHUB_USERNAME:-'Not set'}}"
+    echo -e "{{YELLOW}}Image Name Override:{{NORMAL}} ${IMAGE_NAME:-'Not set'}"
+    echo -e "{{YELLOW}}Default Platforms:{{NORMAL}} ${DEFAULT_PLATFORMS:-linux/amd64,linux/arm64}"
+    echo ""
 
     # Show image details
-    $runtime images "$image_name"
+    if [ -n "$tag" ]; then
+        echo -e "{{BLUE}}Local image details:{{NORMAL}}"
+        $runtime images "$image_name" 2>/dev/null || echo "Image not found locally: $image_name"
+    else
+        echo -e "{{BLUE}}All project images:{{NORMAL}}"
+        $runtime images | grep "$image_name" 2>/dev/null || echo "No images found for project: $project"
+    fi
+
+# List all project images
+[no-cd]
+list project="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    project="{{project}}"
+
+    # Auto-discover project if not specified
+    if [ -z "$project" ]; then
+        echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
+        project=$(just _get_project_name)
+        echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
+    fi
+
+    runtime=$(just _detect_runtime)
+    image_base=$(just _get_image_name "")
 
     echo ""
-    echo -e "{{BLUE}}Image history:{{NORMAL}}"
-    $runtime history "$image_name" 2>/dev/null || echo "Image not found locally"
+    echo -e "{{BLUE}}Images for project: $project{{NORMAL}}"
+    echo -e "{{BLUE}}Base name: $image_base{{NORMAL}}"
+    echo ""
 
-# Remove project images
+    # List all images for this project
+    images=$($runtime images | grep "$image_base" || true)
+
+    if [ -z "$images" ]; then
+        echo -e "{{YELLOW}}No images found for project: $project{{NORMAL}}"
+        echo -e "{{YELLOW}}Build an image with: just images build{{NORMAL}}"
+    else
+        echo "REPOSITORY                              TAG              SIZE       CREATED"
+        echo "$images"
+    fi
+
+# Remove project images with confirmation
 [confirm]
 [no-cd]
 clean project="":
@@ -245,24 +342,17 @@ clean project="":
     # Auto-discover project if not specified
     if [ -z "$project" ]; then
         echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
-        project=$(just _discover_project)
+        project=$(just _get_project_name)
         echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
     fi
 
     runtime=$(just _detect_runtime)
-    registry="${REGISTRY:-ghcr.io}"
-    username="${GITHUB_USERNAME:-}"
-
-    if [ -n "$username" ]; then
-        image_pattern="$registry/$username/$project"
-    else
-        image_pattern="$project"
-    fi
+    image_base=$(just _get_image_name "")
 
     echo -e "{{YELLOW}}Removing all images for project: $project{{NORMAL}}"
 
     # Find and remove all images for the project
-    images=$($runtime images --format "{{{{.Repository}}}}:{{{{.Tag}}}}" | grep "^$image_pattern" || true)
+    images=$($runtime images | grep "^$image_base" | awk '{print $1":"$2}' || true)
 
     if [ -z "$images" ]; then
         echo -e "{{YELLOW}}No images found for project: $project{{NORMAL}}"
@@ -282,7 +372,7 @@ clean project="":
 
     echo -e "{{GREEN}}✓ Project images cleaned{{NORMAL}}"
 
-# Build all known projects
+# Build all projects with Containerfiles
 [no-cd]
 build-all:
     #!/usr/bin/env bash
@@ -292,11 +382,11 @@ build-all:
 
     # Find all directories with Containerfile or Dockerfile using discovery logic
     projects=""
+    has_current_project=false
 
     # Check current directory first (handles docker/ subfolder case)
-    has_current_project=false
     if just _discover_containerfile_in "." >/dev/null 2>&1; then
-        current_project=$(just _discover_project)
+        current_project=$(just _get_project_name)
         has_current_project=true
         echo -e "{{GREEN}}✓ Found project in current directory: $current_project{{NORMAL}}"
     fi

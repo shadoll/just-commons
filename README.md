@@ -178,17 +178,24 @@ just volumes list [pattern]                               # List volumes (option
 
 ### 🐋 Images Module (`images`)
 
-**Universal image operations with automatic registry detection**
+**Universal image operations with intelligent auto-discovery and cross-platform builds**
 
 ```bash
-just images build <project> [tag]                         # Build project image
-just images push <project> [tag]                          # Push image to registry
-just images pull <project> [tag]                          # Pull image from registry
+just images build [project] [tag]                         # Build project image (auto-discovers project and Containerfile)
+just images push [project] [tag]                          # Push image to registry (auto-discovers project)
+just images pull [project] [tag]                          # Pull image from registry (auto-discovers project)
 just images tag <project> <new-tag>                       # Tag existing image
-just images info <project> [tag]                          # Show image information
-just images clean <project>                               # Remove project images (with confirmation)
-just images build-all                                     # Build all projects with Containerfiles
+just images info [project] [tag]                          # Show image information (auto-discovers project)
+just images clean [project]                               # Remove project images (auto-discovers project, with confirmation)
+just images build-all                                     # Build all projects with Containerfiles (uses discovery logic)
 ```
+
+**Auto-Discovery Features:**
+- **Project Detection**: Automatically uses directory basename when project not specified
+- **Containerfile Discovery**: Finds `Containerfile`/`Dockerfile` in current directory or `./docker/` folder
+- **Cross-Platform Builds**: Handles macOS compatibility for Linux containers automatically
+- **Smart Parameter Parsing**: `just images push latest` correctly interprets "latest" as tag, not project
+- **Unified Discovery Logic**: Consistent behavior whether using auto-discovery or explicit project directories
 
 ### 🔐 Registry Module (`registry`)
 
@@ -202,13 +209,23 @@ just registry check                                       # Check authentication
 
 ### 🔧 Core Utilities
 
-**Shared functions and environment checking**
+**Shared functions, auto-discovery, and environment checking**
 
 ```bash
 just env-check                                           # Check container runtime availability
 just _detect_runtime                                     # Internal: Detect Docker/Podman
 just _detect_compose                                     # Internal: Detect compose command
+just _discover_project                                   # Internal: Auto-discover project name from directory
+just _discover_containerfile_in [dir]                   # Internal: Discover Containerfile/Dockerfile in directory
+just _discover_containerfile                            # Internal: Discover Containerfile/Dockerfile in current directory
 ```
+
+**Auto-Discovery Functions:**
+- **`_discover_project`**: Returns `$(basename $(pwd))` - the current directory name as project name
+- **`_discover_containerfile_in`**: Searches for `Containerfile`/`Dockerfile` in specified directory, also checks `./docker/` subfolder when searching current directory
+- **`_discover_containerfile`**: Convenience wrapper for current directory discovery
+
+These functions enable consistent auto-discovery behavior across all modules.
 
 ## 🎨 Modern Just Features
 
@@ -235,12 +252,47 @@ Destructive operations use `[confirm]` attribute:
 
 ## 🌍 Environment Configuration
 
-### Required for Registry Operations
+### Registry Configuration
+
+**Authentication vs Registry Namespace**
+
+The system separates authentication credentials from registry image paths, allowing you to authenticate with your personal account while pushing to organization namespaces.
+
 ```bash
-# .env file
-GITHUB_USERNAME=your-username
-GITHUB_TOKEN=ghp_your-token
-REGISTRY=ghcr.io
+# .env file - Registry settings
+GITHUB_USERNAME=your-auth-username    # For authentication (just registry login)
+GITHUB_TOKEN=ghp_your-token          # For authentication
+REGISTRY_NAMESPACE=org-or-username   # For image paths (ghcr.io/NAMESPACE/project:tag)
+REGISTRY=ghcr.io                     # Registry URL (optional, defaults to ghcr.io)
+```
+
+**Configuration Hierarchy:**
+
+1. **Registry Namespace** (for image paths):
+   - `REGISTRY_NAMESPACE` (if set) - highest priority
+   - `GITHUB_USERNAME` (fallback) - backward compatibility
+   - Error if neither is set
+
+2. **Registry URL**:
+   - `REGISTRY` (if set) - custom registry
+   - `ghcr.io` (default) - GitHub Container Registry
+
+**Examples:**
+
+```bash
+# Organization setup
+GITHUB_USERNAME=john-doe              # Personal auth
+REGISTRY_NAMESPACE=my-company         # Company namespace
+# Result: ghcr.io/my-company/project:tag
+
+# Personal setup
+GITHUB_USERNAME=john-doe              # Personal auth and namespace
+# Result: ghcr.io/john-doe/project:tag
+
+# Custom registry
+REGISTRY=docker.io
+REGISTRY_NAMESPACE=myorg
+# Result: docker.io/myorg/project:tag
 ```
 
 ### Optional Overrides
@@ -263,17 +315,18 @@ just container start postgres            # Start PostgreSQL service
 just container logs postgres             # View logs
 just postgres check                      # Test database connection
 
-# Development operations
+# Development operations (with auto-discovery)
 just postgres sql "CREATE DATABASE myapp;" # Create development database
-just images build myapp                  # Build application image
-just images push myapp dev               # Push development version
+just images build                        # Build application image (auto-discovers project and Containerfile)
+just images push dev                     # Push development version (auto-discovers project, "dev" as tag)
+just images push                         # Push with auto-generated commit tag
 ```
 
 ### Production Deployment
 ```bash
-# Pull latest images
-just images pull myapp latest
-just images pull postgres 15
+# Pull latest images (with auto-discovery)
+just images pull latest                  # Pull latest version (auto-discovers project)
+just images pull postgres 15            # Pull specific PostgreSQL version
 
 # Database operations
 just postgres restore latest-backup.sql  # Restore from backup (with confirmation)
@@ -282,6 +335,10 @@ just postgres sql "ANALYZE;"             # Optimize database
 # Volume management
 just volumes list "production_*"         # List production volumes
 just volumes clean-all compose.prod.yml  # Clean up old volumes (with confirmation)
+
+# Build and deployment
+just images build-all                    # Build all projects with Containerfiles (auto-discovery)
+just images info                         # Show image information (auto-discovers project)
 ```
 
 ### Multi-Database Setup
