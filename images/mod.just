@@ -3,12 +3,13 @@
 
 # Build project image with multi-architecture support
 [no-cd]
-build project="" tag="":
+build project="" tag="" local="false":
     #!/usr/bin/env bash
     set -euo pipefail
 
     project="{{project}}"
     tag="{{tag}}"
+    local="{{local}}"
 
     # Determine discovery directory and project
     if [ -z "$project" ]; then
@@ -51,8 +52,8 @@ build project="" tag="":
     runtime=$(just _detect_runtime)
 
     # Check if multi-platform build is needed
-    if [[ "$platforms" == *","* ]]; then
-        echo -e "{{BLUE}}Multi-platform build detected{{NORMAL}}"
+    if [[ "$platforms" == *","* ]] && [ "$local" != "true" ]; then
+        echo -e "{{BLUE}}Multi-platform build detected: $platforms{{NORMAL}}"
 
         # Use buildx for multi-platform
         if ! $runtime buildx version >/dev/null 2>&1; then
@@ -67,25 +68,57 @@ build project="" tag="":
             $runtime buildx create --use --name just-commons-builder >/dev/null 2>&1 || true
         fi
 
-        # For multi-platform builds, we can't load locally, so build for local platform only
-        local_platform="linux/$(uname -m)"
-        if [ "$(uname -m)" = "x86_64" ]; then
-            local_platform="linux/amd64"
-        elif [ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; then
-            local_platform="linux/arm64"
-        fi
+        echo -e "{{YELLOW}}Multi-platform builds cannot be loaded locally - will build and push to registry{{NORMAL}}"
+        echo -e "{{BLUE}}Building multi-platform image: $platforms{{NORMAL}}"
 
-        echo -e "{{YELLOW}}Multi-platform builds cannot be loaded locally{{NORMAL}}"
-        echo -e "{{BLUE}}Building for local platform: $local_platform{{NORMAL}}"
+        # For podman, build for each platform and create manifest
+        IFS=',' read -ra PLATFORM_ARRAY <<< "$platforms"
 
-        $runtime buildx build \
-            --platform "$local_platform" \
-            -f "$containerfile" \
-            -t "$image_name" \
-            --load \
-            "$build_context"
+        # Build for each platform
+        for platform in "${PLATFORM_ARRAY[@]}"; do
+            echo -e "{{BLUE}}Building for platform: $platform{{NORMAL}}"
+            platform_tag="${image_name}-${platform//\//-}"
+
+            $runtime buildx build \
+                --platform "$platform" \
+                -f "$containerfile" \
+                -t "$platform_tag" \
+                --load \
+                "$build_context"
+
+            # Push platform-specific image
+            $runtime push "$platform_tag"
+        done
+
+        # Create and push manifest
+        echo -e "{{BLUE}}Creating multi-platform manifest{{NORMAL}}"
+
+        # Remove existing manifest if it exists
+        $runtime manifest rm "$image_name" 2>/dev/null || true
+
+        manifest_cmd="$runtime manifest create $image_name"
+        for platform in "${PLATFORM_ARRAY[@]}"; do
+            platform_tag="${image_name}-${platform//\//-}"
+            manifest_cmd="$manifest_cmd $platform_tag"
+        done
+        eval "$manifest_cmd"
+
+        echo -e "{{BLUE}}Pushing multi-platform manifest to registry{{NORMAL}}"
+        $runtime manifest push "$image_name"
     else
-        echo -e "{{BLUE}}Single platform build{{NORMAL}}"
+        if [[ "$platforms" == *","* ]]; then
+            # Local build requested for multi-platform - use local platform only
+            local_platform="linux/$(uname -m)"
+            if [ "$(uname -m)" = "x86_64" ]; then
+                local_platform="linux/amd64"
+            elif [ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; then
+                local_platform="linux/arm64"
+            fi
+            echo -e "{{BLUE}}Local-only build (from multi-platform): $local_platform{{NORMAL}}"
+            platforms="$local_platform"
+        else
+            echo -e "{{BLUE}}Single platform build: $platforms{{NORMAL}}"
+        fi
 
         # Handle single platform builds with potential platform specification
         if grep -q "FROM.*--platform" "$containerfile"; then
@@ -143,17 +176,22 @@ push project="" tag="":
         # Get base image name without tag
         image_base=$(just _get_image_name "")
 
-        # Find only commit-tagged images for this project (most recent build)
-        commit_images=$($runtime images | grep "^$image_base" | grep " commit-" | awk '{print $1":"$2}' || true)
+        # Find the commit image that matches the current git commit
+        current_commit_tag=$(just _generate_default_tag)
+        latest_commit_image=$(just _get_image_name "$current_commit_tag")
 
-        if [ -z "$commit_images" ]; then
+        # Check if the current commit image exists
+        if ! $runtime images "$latest_commit_image" >/dev/null 2>&1; then
+            # Fallback: get the most recent commit-tagged image
+            latest_commit_image=$($runtime images | grep "^$image_base" | grep " commit-" | head -1 | awk '{print $1":"$2}' || true)
+        fi
+
+        if [ -z "$latest_commit_image" ]; then
             echo "{{BOLD}}{{RED}}Error:{{NORMAL}} No commit-tagged images found to tag as latest" >&2
             echo "{{YELLOW}}Build an image first with: just images build{{NORMAL}}" >&2
             exit 1
         fi
 
-        # Get the most recent commit image (first in the list since images are sorted by creation time)
-        latest_commit_image=$(echo "$commit_images" | head -1)
 
         echo -e "{{BLUE}}Found latest commit image: $latest_commit_image{{NORMAL}}"
 
