@@ -74,29 +74,45 @@ build project="" tag="" local="false":
         # For podman, build for each platform and create manifest
         IFS=',' read -ra PLATFORM_ARRAY <<< "$platforms"
 
-        # For multi-platform builds with podman, build locally only for current platform
-        echo -e "{{BLUE}}Multi-platform build detected, building for local platform only{{NORMAL}}"
+        # For multi-platform builds, build both architectures locally
+        echo -e "{{BLUE}}Building multi-platform image for: $platforms{{NORMAL}}"
 
-        # Detect local platform
-        if [ "$(uname -m)" = "x86_64" ]; then
-            local_platform="linux/amd64"
-        elif [ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; then
-            local_platform="linux/arm64"
-        else
-            local_platform="linux/amd64"
-        fi
+        # First, remove any existing manifest or conflicting tags
+        $runtime manifest rm "$image_name" 2>/dev/null || true
+        $runtime rmi "$image_name" 2>/dev/null || true
 
-        echo -e "{{BLUE}}Building for local platform: $local_platform{{NORMAL}}"
+        # Build each platform locally with unique temporary tags
+        local temp_tags=()
+        for platform in "${PLATFORM_ARRAY[@]}"; do
+            echo -e "{{BLUE}}Building for platform: $platform{{NORMAL}}"
 
-        $runtime buildx build \
-            --platform "$local_platform" \
-            -f "$containerfile" \
-            -t "$image_name" \
-            --load \
-            "$build_context"
+            # Create unique temporary tag for this build
+            temp_tag="${image_name}-build-$(date +%s)-${platform//\//-}"
+            temp_tags+=("$temp_tag")
 
-        echo -e "{{GREEN}}✓ Local build completed: $image_name{{NORMAL}}"
-        echo -e "{{YELLOW}}Note: For multi-platform registry deployment, use 'just images push'{{NORMAL}}"
+            $runtime buildx build \
+                --platform "$platform" \
+                -f "$containerfile" \
+                -t "$temp_tag" \
+                --load \
+                "$build_context"
+        done
+
+        # Create manifest from temporary tags
+        echo -e "{{BLUE}}Creating multi-platform manifest{{NORMAL}}"
+
+        manifest_cmd="$runtime manifest create $image_name"
+        for temp_tag in "${temp_tags[@]}"; do
+            manifest_cmd="$manifest_cmd $temp_tag"
+        done
+        eval "$manifest_cmd"
+
+        # Clean up temporary tags
+        for temp_tag in "${temp_tags[@]}"; do
+            $runtime rmi "$temp_tag" 2>/dev/null || true
+        done
+
+        echo -e "{{GREEN}}✓ Multi-platform build completed: $image_name{{NORMAL}}"
     else
         if [[ "$platforms" == *","* ]]; then
             # Local build requested for multi-platform - use local platform only
@@ -206,57 +222,23 @@ push project="" tag="":
 
         echo -e "{{GREEN}}✓ Successfully pushed both commit and latest tags{{NORMAL}}"
     else
-        # Regular tag push - build and push multi-platform to registry
+        # Regular tag push - push existing image
         image_name=$(just _get_image_name "$tag")
 
-        echo -e "{{BLUE}}Building and pushing multi-platform image: $image_name{{NORMAL}}"
+        # Check if the image exists locally
+        if ! $runtime images "$image_name" >/dev/null 2>&1; then
+            echo "{{BOLD}}{{RED}}Error:{{NORMAL}} Image $image_name not found locally" >&2
+            echo "{{YELLOW}}Build the image first with: just images build{{NORMAL}}" >&2
+            echo "{{YELLOW}}Available images:{{NORMAL}}" >&2
+            image_base=$(just _get_image_name "")
+            $runtime images | grep "$image_base" || echo "No images found for project: $project" >&2
+            exit 1
+        fi
 
-        # Auto-discover containerfile
-        containerfile_info=$(just _discover_containerfile)
-        read -r containerfile project_name build_context <<< "$containerfile_info"
+        echo -e "{{BLUE}}Pushing image: $image_name{{NORMAL}}"
+        $runtime push "$image_name"
 
-        # Detect platforms
-        platforms=$(just _detect_platforms "$containerfile")
-        echo -e "{{BLUE}}Platforms: $platforms{{NORMAL}}"
-
-        # Build for each platform and push to registry
-        IFS=',' read -ra PLATFORM_ARRAY <<< "$platforms"
-
-        for platform in "${PLATFORM_ARRAY[@]}"; do
-            echo -e "{{BLUE}}Building and pushing for platform: $platform{{NORMAL}}"
-            platform_tag="${image_name}-${platform//\//-}"
-
-            $runtime buildx build \
-                --platform "$platform" \
-                -f "$containerfile" \
-                -t "$platform_tag" \
-                "$build_context"
-
-            # Push platform-specific image to registry
-            $runtime push "$platform_tag"
-        done
-
-        # Create and push manifest from registry images
-        echo -e "{{BLUE}}Creating multi-platform manifest{{NORMAL}}"
-        $runtime manifest rm "$image_name" 2>/dev/null || true
-
-        manifest_cmd="$runtime manifest create $image_name"
-        for platform in "${PLATFORM_ARRAY[@]}"; do
-            platform_tag="${image_name}-${platform//\//-}"
-            manifest_cmd="$manifest_cmd $platform_tag"
-        done
-        eval "$manifest_cmd"
-
-        echo -e "{{BLUE}}Pushing multi-platform manifest to registry{{NORMAL}}"
-        $runtime manifest push "$image_name"
-
-        # Clean up local platform-specific tags
-        for platform in "${PLATFORM_ARRAY[@]}"; do
-            platform_tag="${image_name}-${platform//\//-}"
-            $runtime rmi "$platform_tag" 2>/dev/null || true
-        done
-
-        echo -e "{{GREEN}}✓ Successfully pushed multi-platform image: $image_name{{NORMAL}}"
+        echo -e "{{GREEN}}✓ Successfully pushed: $image_name{{NORMAL}}"
     fi
 
 # Pull project image from registry
