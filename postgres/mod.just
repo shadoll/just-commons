@@ -1,5 +1,48 @@
 # Universal PostgreSQL database operations
 
+# Define custom colors not in Just's native set
+DARK_GREY := '\033[2m'   # Dark grey (dim) for optional parameters
+
+alias help := default
+
+# Default recipe - show available commands
+[no-cd]
+[private]
+default:
+    #!/usr/bin/env bash
+    echo "{{BOLD}}PostgreSQL Management Commands{{NORMAL}}"
+    echo ""
+    echo "{{BOLD}}Usage:{{NORMAL}}"
+    echo "  just postgres <command> [parameters]"
+    echo ""
+    echo "{{BOLD}}Parameters:{{NORMAL}}"
+    echo -e "  {{YELLOW}}<required>{{NORMAL}}   - Required parameter"
+    echo -e "  {{DARK_GREY}}[optional]{{NORMAL}}   - Optional parameter"
+    echo ""
+    echo -e "  {{DARK_GREY}}[service]{{NORMAL}}      - Service name (default: postgres)"
+    echo -e "  {{DARK_GREY}}[compose-file]{{NORMAL}} - Path to compose file"
+    echo ""
+    echo "{{BOLD}}Commands:{{NORMAL}}"
+    echo -e "  {{CYAN}}{{BOLD}}check{{NORMAL}}              {{DARK_GREY}}[service] [compose-file]\033[0m           - Check connection and status"
+    echo -e "  {{CYAN}}{{BOLD}}sql{{NORMAL}}                {{YELLOW}}<query>{{NORMAL}} {{DARK_GREY}}[service] [compose-file]\033[0m  - Execute SQL query"
+    echo -e "  {{CYAN}}{{BOLD}}shell{{NORMAL}}              {{DARK_GREY}}[service] [compose-file]\033[0m           - Open interactive shell"
+    echo -e "  {{CYAN}}{{BOLD}}list-databases{{NORMAL}}     {{DARK_GREY}}[service] [compose-file]\033[0m           - List all databases"
+    echo -e "  {{CYAN}}{{BOLD}}list-users{{NORMAL}}         {{DARK_GREY}}[service] [compose-file]\033[0m           - List all users"
+    echo -e "  {{CYAN}}{{BOLD}}create-database{{NORMAL}}    {{YELLOW}}<database>{{NORMAL}} {{DARK_GREY}}[service] [compose-file]\033[0m - Create database"
+    echo -e "  {{CYAN}}{{BOLD}}drop-database{{NORMAL}}      {{YELLOW}}<database>{{NORMAL}} {{DARK_GREY}}[service] [compose-file]\033[0m - Drop database (with confirmation)"
+    echo -e "  {{CYAN}}{{BOLD}}restore{{NORMAL}}            {{YELLOW}}<backup_file>{{NORMAL}} {{DARK_GREY}}[service] [compose-file] [backup_path]\033[0m - Restore from backup"
+    echo ""
+    echo "{{RED}}⚠️  WARNING: drop-database and restore are DESTRUCTIVE operations!{{NORMAL}}"
+    echo ""
+    echo "{{BOLD}}Examples:{{NORMAL}}"
+    echo "  just postgres check                     # Check PostgreSQL status"
+    echo "  just postgres sql \"SELECT version();\"   # Execute SQL query"
+    echo "  just postgres shell                     # Open interactive shell"
+    echo "  just postgres list-databases            # List all databases"
+    echo "  just postgres create-database mydb      # Create new database"
+    echo "  just postgres restore backup.sql        # Restore from backup"
+    echo ""
+
 # Execute PostgreSQL SQL query
 sql query service="postgres" compose-file="":
     #!/usr/bin/env bash

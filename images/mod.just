@@ -1,6 +1,46 @@
 # Container images module - comprehensive image management
 # Supports multi-architecture builds, flexible naming, and registry operations
 
+# Define custom colors not in Just's native set
+DARK_GREY := '\033[2m'   # Dark grey (dim) for optional parameters
+
+alias help := default
+
+# Default recipe - show available commands
+[no-cd]
+[private]
+default:
+    #!/usr/bin/env bash
+    echo "{{BOLD}}Container Images Commands{{NORMAL}}"
+    echo ""
+    echo "{{BOLD}}Usage:{{NORMAL}}"
+    echo "  just images <command> [project] [tag]"
+    echo ""
+    echo "{{BOLD}}Parameters:{{NORMAL}}"
+    echo -e "  {{YELLOW}}<required>{{NORMAL}}   - Required parameter"
+    echo -e "  {{DARK_GREY}}[optional]{{NORMAL}}   - Optional parameter"
+    echo ""
+    echo -e "  {{DARK_GREY}}[project]{{NORMAL}}    - Project name (if empty, auto-discovers from current directory)"
+    echo -e "  {{DARK_GREY}}[tag]{{NORMAL}}        - Image tag (if empty, generates from git commit or timestamp)"
+    echo ""
+    echo "{{BOLD}}Commands:{{NORMAL}}"
+    echo -e "  {{CYAN}}{{BOLD}}build{{NORMAL}}        {{DARK_GREY}}[project] [tag]\033[0m            - Build image with multi-architecture support"
+    echo -e "  {{CYAN}}{{BOLD}}push{{NORMAL}}         {{DARK_GREY}}[project] [tag]\033[0m            - Push image to registry"
+    echo -e "  {{CYAN}}{{BOLD}}pull{{NORMAL}}         {{DARK_GREY}}[project] [tag]\033[0m            - Pull image from registry"
+    echo -e "  {{CYAN}}{{BOLD}}tag{{NORMAL}}          {{YELLOW}}<source_tag> <new_tag>{{NORMAL}}     - Tag existing image with new tag"
+    echo -e "  {{CYAN}}{{BOLD}}info{{NORMAL}}         {{DARK_GREY}}[project] [tag]\033[0m            - Show image information"
+    echo -e "  {{CYAN}}{{BOLD}}list{{NORMAL}}         {{DARK_GREY}}[project]\033[0m                  - List all project images"
+    echo -e "  {{CYAN}}{{BOLD}}clean{{NORMAL}}        {{DARK_GREY}}[project]\033[0m                  - Remove project images (with confirmation)"
+    echo -e "  {{CYAN}}{{BOLD}}build-all{{NORMAL}}                                  - Build all projects with Containerfiles"
+    echo ""
+    echo "{{BOLD}}Examples:{{NORMAL}}"
+    echo "  just images build                       # Build current project with auto-generated tag"
+    echo "  just images build myapp v1.0.0          # Build specific project with version tag"
+    echo "  just images push                        # Push current project latest build"
+    echo "  just images push latest                 # Push current project as latest"
+    echo "  just images list                        # List all images for current project"
+    echo ""
+
 # Build project image with multi-architecture support
 [no-cd]
 build project="" tag="":

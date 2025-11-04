@@ -1,5 +1,45 @@
 # Universal container management operations
 
+# Define custom colors not in Just's native set
+DARK_GREY := '\033[2m'   # Dark grey (dim) for optional parameters
+
+alias help := default
+
+# Default recipe - show available commands
+[no-cd]
+[private]
+default:
+    #!/usr/bin/env bash
+    echo "{{BOLD}}Container Management Commands{{NORMAL}}"
+    echo ""
+    echo "{{BOLD}}Usage:{{NORMAL}}"
+    echo "  just container <command> [service] [compose-file]"
+    echo ""
+    echo "{{BOLD}}Parameters:{{NORMAL}}"
+    echo -e "  {{YELLOW}}<required>{{NORMAL}}   - Required parameter"
+    echo -e "  {{DARK_GREY}}[optional]{{NORMAL}}   - Optional parameter"
+    echo ""
+    echo -e "  {{DARK_GREY}}[service]{{NORMAL}}      - Service name (if empty, applies to all services)"
+    echo -e "  {{DARK_GREY}}[compose-file]{{NORMAL}} - Path to compose file (if empty, uses default)"
+    echo ""
+    echo "{{BOLD}}Commands:{{NORMAL}}"
+    echo -e "  {{CYAN}}{{BOLD}}start{{NORMAL}}        {{DARK_GREY}}[service] [compose-file]\033[0m       - Start service(s)"
+    echo -e "  {{CYAN}}{{BOLD}}stop{{NORMAL}}         {{DARK_GREY}}[service] [compose-file]\033[0m       - Stop service(s)"
+    echo -e "  {{CYAN}}{{BOLD}}restart{{NORMAL}}      {{DARK_GREY}}[service] [compose-file]\033[0m       - Restart service(s)"
+    echo -e "  {{CYAN}}{{BOLD}}status{{NORMAL}}       {{DARK_GREY}}[service] [compose-file]\033[0m       - Show status"
+    echo -e "  {{CYAN}}{{BOLD}}logs{{NORMAL}}         {{DARK_GREY}}[service] [compose-file]\033[0m       - View logs"
+    echo -e "  {{CYAN}}{{BOLD}}shell{{NORMAL}}        {{YELLOW}}<service>{{NORMAL}} {{DARK_GREY}}[compose-file]\033[0m       - Open shell"
+    echo -e "  {{CYAN}}{{BOLD}}exec{{NORMAL}}         {{YELLOW}}<service> <cmd>{{NORMAL}} {{DARK_GREY}}[compose-file]\033[0m - Execute command"
+    echo -e "  {{CYAN}}{{BOLD}}exec-pipe{{NORMAL}}    {{YELLOW}}<service> <cmd>{{NORMAL}} {{DARK_GREY}}[compose-file]\033[0m - Execute with piped input"
+    echo ""
+    echo "{{BOLD}}Examples:{{NORMAL}}"
+    echo "  just container start                    # Start all services"
+    echo "  just container start myapp              # Start specific service"
+    echo "  just container logs myapp               # View logs for myapp"
+    echo "  just container shell myapp              # Open shell in myapp"
+    echo "  just container status                   # Show all services status"
+    echo ""
+
 # Start service (or all services if no service specified)
 [no-cd]
 start service="" compose-file="":

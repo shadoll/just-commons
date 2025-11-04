@@ -1,5 +1,40 @@
 # Universal volume management operations
 
+# Define custom colors not in Just's native set
+DARK_GREY := '\033[2m'   # Dark grey (dim) for optional parameters
+
+alias help := default
+
+# Default recipe - show available commands
+[no-cd]
+[private]
+default:
+    #!/usr/bin/env bash
+    echo "{{BOLD}}Volume Management Commands{{NORMAL}}"
+    echo ""
+    echo "{{BOLD}}Usage:{{NORMAL}}"
+    echo "  just volumes <command> [parameters]"
+    echo ""
+    echo "{{BOLD}}Parameters:{{NORMAL}}"
+    echo -e "  {{YELLOW}}<required>{{NORMAL}}   - Required parameter"
+    echo -e "  {{DARK_GREY}}[optional]{{NORMAL}}   - Optional parameter"
+    echo ""
+    echo "{{BOLD}}Commands:{{NORMAL}}"
+    echo -e "  {{CYAN}}{{BOLD}}list{{NORMAL}}           {{DARK_GREY}}[pattern]\033[0m               - List all volumes or filter by pattern"
+    echo -e "  {{CYAN}}{{BOLD}}remove{{NORMAL}}         {{YELLOW}}<volume_name>{{NORMAL}}          - Remove specific volume (with confirmation)"
+    echo -e "  {{CYAN}}{{BOLD}}remove-pattern{{NORMAL}} {{YELLOW}}<pattern>{{NORMAL}}              - Remove volumes matching pattern (with confirmation)"
+    echo -e "  {{CYAN}}{{BOLD}}clean-all{{NORMAL}}      {{DARK_GREY}}[compose-file]\033[0m         - Clean all volumes from compose file (with confirmation)"
+    echo ""
+    echo "{{RED}}⚠️  WARNING: Remove operations are DESTRUCTIVE and will DELETE DATA!{{NORMAL}}"
+    echo ""
+    echo "{{BOLD}}Examples:{{NORMAL}}"
+    echo "  just volumes list                       # List all volumes"
+    echo "  just volumes list myproject             # Filter volumes by pattern"
+    echo "  just volumes remove myproject_db_data   # Remove specific volume"
+    echo "  just volumes remove-pattern 'myproject_*' # Remove all matching volumes"
+    echo "  just volumes clean-all compose.yml      # Remove all compose volumes"
+    echo ""
+
 # Clean all volumes used by compose file (DESTRUCTIVE!)
 [confirm]
 clean-all compose-file="":

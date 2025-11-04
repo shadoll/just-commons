@@ -1,5 +1,54 @@
 # Universal MySQL database operations
 
+# Define custom colors not in Just's native set
+DARK_GREY := '\033[2m'   # Dark grey (dim) for optional parameters
+
+alias help := default
+
+# Default recipe - show available commands
+[no-cd]
+[private]
+default:
+    #!/usr/bin/env bash
+    echo "{{BOLD}}MySQL Management Commands{{NORMAL}}"
+    echo ""
+    echo "{{BOLD}}Usage:{{NORMAL}}"
+    echo "  just mysql <command> [parameters]"
+    echo ""
+    echo "{{BOLD}}Parameters:{{NORMAL}}"
+    echo -e "  {{YELLOW}}<required>{{NORMAL}}   - Required parameter"
+    echo -e "  {{DARK_GREY}}[optional]{{NORMAL}}   - Optional parameter"
+    echo ""
+    echo -e "  {{DARK_GREY}}[service]{{NORMAL}}      - Service name (default: mysql)"
+    echo -e "  {{DARK_GREY}}[compose-file]{{NORMAL}} - Path to compose file"
+    echo ""
+    echo "{{BOLD}}Commands:{{NORMAL}}"
+    echo -e "  {{CYAN}}{{BOLD}}check{{NORMAL}}              {{DARK_GREY}}[service] [compose-file]\033[0m                              - Check connection and status"
+    echo -e "  {{CYAN}}{{BOLD}}sql{{NORMAL}}                {{YELLOW}}<query>{{NORMAL}} {{DARK_GREY}}[service] [compose-file]\033[0m                     - Execute SQL query"
+    echo -e "  {{CYAN}}{{BOLD}}shell{{NORMAL}}              {{DARK_GREY}}[service] [compose-file]\033[0m                              - Open interactive shell"
+    echo -e "  {{CYAN}}{{BOLD}}list-databases{{NORMAL}}     {{DARK_GREY}}[service] [compose-file]\033[0m                              - List all databases"
+    echo -e "  {{CYAN}}{{BOLD}}list-users{{NORMAL}}         {{DARK_GREY}}[service] [compose-file]\033[0m                              - List all users"
+    echo -e "  {{CYAN}}{{BOLD}}create-database{{NORMAL}}    {{YELLOW}}<database>{{NORMAL}} {{DARK_GREY}}[service] [compose-file]\033[0m                    - Create database"
+    echo -e "  {{CYAN}}{{BOLD}}drop-database{{NORMAL}}      {{YELLOW}}<database>{{NORMAL}} {{DARK_GREY}}[service] [compose-file]\033[0m                    - Drop database (with confirmation)"
+    echo -e "  {{CYAN}}{{BOLD}}create-user{{NORMAL}}        {{YELLOW}}<username> <password>{{NORMAL}} {{DARK_GREY}}[service] [compose-file]\033[0m        - Create user"
+    echo -e "  {{CYAN}}{{BOLD}}grant-privileges{{NORMAL}}   {{YELLOW}}<database> <username>{{NORMAL}} {{DARK_GREY}}[service] [compose-file]\033[0m        - Grant privileges"
+    echo -e "  {{CYAN}}{{BOLD}}backup{{NORMAL}}             {{YELLOW}}<database>{{NORMAL}} {{DARK_GREY}}[service] [compose-file] [backup_path] [name]\033[0m - Create backup"
+    echo -e "  {{CYAN}}{{BOLD}}restore{{NORMAL}}            {{YELLOW}}<backup_file> <database>{{NORMAL}} {{DARK_GREY}}[service] [compose-file] [backup_path]\033[0m - Restore from backup"
+    echo ""
+    echo "{{RED}}⚠️  WARNING: drop-database and restore are DESTRUCTIVE operations!{{NORMAL}}"
+    echo ""
+    echo "{{BOLD}}Examples:{{NORMAL}}"
+    echo "  just mysql check                        # Check MySQL status"
+    echo "  just mysql sql \"SELECT VERSION();\"      # Execute SQL query"
+    echo "  just mysql shell                        # Open interactive shell"
+    echo "  just mysql list-databases               # List all databases"
+    echo "  just mysql create-database mydb         # Create new database"
+    echo "  just mysql create-user myuser mypass    # Create new user"
+    echo "  just mysql grant-privileges mydb myuser # Grant user access to database"
+    echo "  just mysql backup mydb                  # Backup database"
+    echo "  just mysql restore backup.sql mydb      # Restore from backup"
+    echo ""
+
 # Execute MySQL SQL query
 [no-cd]
 sql query service="mysql" compose-file="":

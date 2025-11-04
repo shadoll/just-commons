@@ -1,5 +1,32 @@
 # Container registry authentication and management
 
+alias help := default
+
+# Default recipe - show available commands
+[no-cd]
+[private]
+default:
+    @echo "{{BOLD}}Registry Management Commands{{NORMAL}}"
+    @echo ""
+    @echo "{{BOLD}}Usage:{{NORMAL}}"
+    @echo "  just registry <command>"
+    @echo ""
+    @echo "{{BOLD}}Commands:{{NORMAL}}"
+    @echo "  {{CYAN}}{{BOLD}}login{{NORMAL}}   - Login to container registry"
+    @echo "  {{CYAN}}{{BOLD}}logout{{NORMAL}}  - Logout from container registry"
+    @echo "  {{CYAN}}{{BOLD}}check{{NORMAL}}   - Check registry authentication status"
+    @echo ""
+    @echo "{{BOLD}}Environment Variables:{{NORMAL}}"
+    @echo "  GITHUB_USERNAME - Registry username (required for login)"
+    @echo "  GITHUB_TOKEN    - Registry token/password (required for login)"
+    @echo "  REGISTRY        - Registry URL (default: ghcr.io)"
+    @echo ""
+    @echo "{{BOLD}}Examples:{{NORMAL}}"
+    @echo "  just registry login    # Login to registry using env vars"
+    @echo "  just registry check    # Check authentication status"
+    @echo "  just registry logout   # Logout from registry"
+    @echo ""
+
 # Login to container registry
 login:
     #!/usr/bin/env bash
