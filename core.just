@@ -219,6 +219,30 @@ _detect_compose:
         exit 1
     fi
 
+# Auto-discover compose file in current directory
+_discover_compose_file:
+    #!/usr/bin/env bash
+    # Check common compose file locations in priority order
+    if [ -f "compose.yml" ]; then
+        echo "compose.yml"
+    elif [ -f "compose.yaml" ]; then
+        echo "compose.yaml"
+    elif [ -f "docker-compose.yml" ]; then
+        echo "docker-compose.yml"
+    elif [ -f "docker-compose.yaml" ]; then
+        echo "docker-compose.yaml"
+    elif [ -f "container/compose.yml" ]; then
+        echo "container/compose.yml"
+    elif [ -f "container/compose.yaml" ]; then
+        echo "container/compose.yaml"
+    elif [ -f "container-compose.yml" ]; then
+        echo "container-compose.yml"
+    elif [ -f "container-compose.yaml" ]; then
+        echo "container-compose.yaml"
+    else
+        echo ""
+    fi
+
 # Environment detection and validation
 [group('environment')]
 env-check:

@@ -35,9 +35,14 @@ default:
     echo "{{BOLD}}Examples:{{NORMAL}}"
     echo "  just container start                    # Start all services"
     echo "  just container start myapp              # Start specific service"
+    echo "  just container start \"\" compose.yml     # Start all services with custom compose file"
+    echo "  just container start myapp compose.yml  # Start myapp with custom compose file"
     echo "  just container logs myapp               # View logs for myapp"
     echo "  just container shell myapp              # Open shell in myapp"
     echo "  just container status                   # Show all services status"
+    echo "  just container status \"\" compose.yml    # Status with custom compose file"
+    echo ""
+    echo "{{BOLD}}Note:{{NORMAL}} Use empty string \"\" to skip optional parameters when providing later ones"
     echo ""
 
 # Start service (or all services if no service specified)
@@ -50,6 +55,11 @@ start service="" compose-file="":
     service="{{service}}"
     compose_file="{{compose-file}}"
 
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
+
     # Build compose file argument
     file_arg=""
     if [ -n "$compose_file" ]; then
@@ -58,7 +68,13 @@ start service="" compose-file="":
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Starting service: $service{{NORMAL}}"
-        $compose_cmd $file_arg up -d "$service"
+        if ! $compose_cmd $file_arg up -d "$service" 2>&1; then
+            echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
+            echo ""
+            echo -e "{{YELLOW}}Available services:{{NORMAL}}"
+            $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+            exit 1
+        fi
         echo -e "{{GREEN}}✓ Service $service started{{NORMAL}}"
     else
         echo -e "{{BLUE}}Starting all services...{{NORMAL}}"
@@ -76,6 +92,11 @@ stop service="" compose-file="":
     service="{{service}}"
     compose_file="{{compose-file}}"
 
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
+
     # Build compose file argument
     file_arg=""
     if [ -n "$compose_file" ]; then
@@ -84,7 +105,13 @@ stop service="" compose-file="":
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Stopping service: $service{{NORMAL}}"
-        $compose_cmd $file_arg stop "$service"
+        if ! $compose_cmd $file_arg stop "$service" 2>&1; then
+            echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
+            echo ""
+            echo -e "{{YELLOW}}Available services:{{NORMAL}}"
+            $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+            exit 1
+        fi
         echo -e "{{GREEN}}✓ Service $service stopped{{NORMAL}}"
     else
         echo -e "{{BLUE}}Stopping all services...{{NORMAL}}"
@@ -102,6 +129,11 @@ restart service="" compose-file="":
     service="{{service}}"
     compose_file="{{compose-file}}"
 
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
+
     # Build compose file argument
     file_arg=""
     if [ -n "$compose_file" ]; then
@@ -110,7 +142,13 @@ restart service="" compose-file="":
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Restarting service: $service{{NORMAL}}"
-        $compose_cmd $file_arg restart "$service"
+        if ! $compose_cmd $file_arg restart "$service" 2>&1; then
+            echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
+            echo ""
+            echo -e "{{YELLOW}}Available services:{{NORMAL}}"
+            $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+            exit 1
+        fi
         echo -e "{{GREEN}}✓ Service $service restarted{{NORMAL}}"
     else
         just container stop "$service" "$compose_file"
@@ -127,6 +165,11 @@ status service="" compose-file="":
     service="{{service}}"
     compose_file="{{compose-file}}"
 
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
+
     # Build compose file argument
     file_arg=""
     if [ -n "$compose_file" ]; then
@@ -135,7 +178,8 @@ status service="" compose-file="":
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Status for: $service{{NORMAL}}"
-        $compose_cmd $file_arg ps "$service"
+        # Filter output for specific service
+        $compose_cmd $file_arg ps | grep -E "(NAME|$service)" || echo "Service $service not found"
     else
         echo -e "{{BLUE}}Service Status:{{NORMAL}}"
         $compose_cmd $file_arg ps
