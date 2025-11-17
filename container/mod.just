@@ -195,6 +195,11 @@ logs service="" compose-file="":
     service="{{service}}"
     compose_file="{{compose-file}}"
 
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
+
     # Build compose file argument
     file_arg=""
     if [ -n "$compose_file" ]; then
@@ -219,6 +224,11 @@ shell service compose-file="":
     service="{{service}}"
     compose_file="{{compose-file}}"
 
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
+
     # Build compose file argument
     file_arg=""
     if [ -n "$compose_file" ]; then
@@ -239,6 +249,11 @@ exec service cmd compose-file="":
     cmd="{{cmd}}"
     compose_file="{{compose-file}}"
 
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
+
     # Build compose file argument
     file_arg=""
     if [ -n "$compose_file" ]; then
@@ -258,6 +273,11 @@ exec-pipe service cmd compose-file="":
     service="{{service}}"
     cmd="{{cmd}}"
     compose_file="{{compose-file}}"
+
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
 
     # Build compose file argument
     file_arg=""
