@@ -143,14 +143,24 @@ restart service="" compose-file="":
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Restarting service: $service{{NORMAL}}"
-        if ! $compose_cmd $file_arg restart "$service" 2>&1; then
-            echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
-            echo ""
-            echo -e "{{YELLOW}}Available services:{{NORMAL}}"
-            $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
-            exit 1
+
+        # Try to restart first
+        $compose_cmd $file_arg restart "$service" 2>/dev/null || true
+
+        # Check if service is actually running after restart attempt
+        if $compose_cmd $file_arg ps "$service" 2>/dev/null | grep -q "Up"; then
+            echo -e "{{GREEN}}✓ Service $service restarted{{NORMAL}}"
+        else
+            echo -e "{{YELLOW}}Service $service not running, starting instead...{{NORMAL}}"
+            if ! $compose_cmd $file_arg up -d "$service" 2>&1; then
+                echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
+                echo ""
+                echo -e "{{YELLOW}}Available services:{{NORMAL}}"
+                $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+                exit 1
+            fi
+            echo -e "{{GREEN}}✓ Service $service started{{NORMAL}}"
         fi
-        echo -e "{{GREEN}}✓ Service $service restarted{{NORMAL}}"
     else
         just container stop "$service" "$compose_file"
         just container start "$service" "$compose_file"
