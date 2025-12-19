@@ -26,6 +26,7 @@ default:
     echo -e "  {{CYAN}}{{BOLD}}start{{NORMAL}}        {{DARK_GREY}}[service] [compose-file]\033[0m       - Start service(s)"
     echo -e "  {{CYAN}}{{BOLD}}stop{{NORMAL}}         {{DARK_GREY}}[service] [compose-file]\033[0m       - Stop service(s)"
     echo -e "  {{CYAN}}{{BOLD}}restart{{NORMAL}}      {{DARK_GREY}}[service] [compose-file]\033[0m       - Restart service(s)"
+    echo -e "  {{CYAN}}{{BOLD}}clean{{NORMAL}}        {{DARK_GREY}}[service] [compose-file]\033[0m       - Clean up service(s) and orphans"
     echo -e "  {{CYAN}}{{BOLD}}status{{NORMAL}}       {{DARK_GREY}}[service] [compose-file]\033[0m       - Show status"
     echo -e "  {{CYAN}}{{BOLD}}logs{{NORMAL}}         {{DARK_GREY}}[service] [compose-file]\033[0m       - View logs"
     echo -e "  {{CYAN}}{{BOLD}}shell{{NORMAL}}        {{YELLOW}}<service>{{NORMAL}} {{DARK_GREY}}[compose-file]\033[0m       - Open shell"
@@ -153,6 +154,43 @@ restart service="" compose-file="":
     else
         just container stop "$service" "$compose_file"
         just container start "$service" "$compose_file"
+    fi
+
+# Clean up service (or all services if no service specified) and remove orphans
+[no-cd]
+clean service="" compose-file="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    compose_cmd=$(just _detect_compose)
+    service="{{service}}"
+    compose_file="{{compose-file}}"
+
+    # Auto-discover compose file if not provided
+    if [ -z "$compose_file" ]; then
+        compose_file=$(just _discover_compose_file)
+    fi
+
+    # Build compose file argument
+    file_arg=""
+    if [ -n "$compose_file" ]; then
+        file_arg="-f $compose_file"
+    fi
+
+    if [ -n "$service" ]; then
+        echo -e "{{BLUE}}Cleaning up service: $service{{NORMAL}}"
+        if ! $compose_cmd $file_arg down "$service" --remove-orphans 2>&1; then
+            echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
+            echo ""
+            echo -e "{{YELLOW}}Available services:{{NORMAL}}"
+            $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+            exit 1
+        fi
+        echo -e "{{GREEN}}✓ Service $service cleaned up{{NORMAL}}"
+    else
+        echo -e "{{BLUE}}Cleaning up all services and orphans...{{NORMAL}}"
+        $compose_cmd $file_arg down --remove-orphans
+        echo -e "{{GREEN}}✓ All services and orphans cleaned up{{NORMAL}}"
     fi
 
 # Show service status (specific service or all)

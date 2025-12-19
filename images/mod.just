@@ -24,105 +24,161 @@ default:
     echo -e "  {{DARK_GREY}}[tag]{{NORMAL}}        - Image tag (if empty, generates from git commit or timestamp)"
     echo ""
     echo "{{BOLD}}Commands:{{NORMAL}}"
-    echo -e "  {{CYAN}}{{BOLD}}build{{NORMAL}}        {{DARK_GREY}}[project] [tag]\033[0m            - Build image with multi-architecture support"
+    echo -e "  {{CYAN}}{{BOLD}}build{{NORMAL}}        {{DARK_GREY}}[service] [compose-file] [tag] [no-cache]\033[0m            - Build service(s) using docker-compose or image with multi-architecture support"
     echo -e "  {{CYAN}}{{BOLD}}push{{NORMAL}}         {{DARK_GREY}}[project] [tag]\033[0m            - Push image to registry"
     echo -e "  {{CYAN}}{{BOLD}}pull{{NORMAL}}         {{DARK_GREY}}[project] [tag]\033[0m            - Pull image from registry"
     echo -e "  {{CYAN}}{{BOLD}}tag{{NORMAL}}          {{YELLOW}}<source_tag> <new_tag>{{NORMAL}}     - Tag existing image with new tag"
-    echo -e "  {{CYAN}}{{BOLD}}info{{NORMAL}}         {{DARK_GREY}}[project] [tag]\033[0m            - Show image information"
+    echo -e "  {{CYAN}}{{BOLD}}info{{NORMAL}}         {{DARK_GREY}}[service] [compose-file] [tag]\033[0m            - Show container service or image information"
     echo -e "  {{CYAN}}{{BOLD}}list{{NORMAL}}         {{DARK_GREY}}[project]\033[0m                  - List all project images"
     echo -e "  {{CYAN}}{{BOLD}}clean{{NORMAL}}        {{DARK_GREY}}[project]\033[0m                  - Remove project images (with confirmation)"
     echo -e "  {{CYAN}}{{BOLD}}build-all{{NORMAL}}                                  - Build all projects with Containerfiles"
     echo ""
     echo "{{BOLD}}Examples:{{NORMAL}}"
-    echo "  just images build                       # Build current project with auto-generated tag"
-    echo "  just images build myapp v1.0.0          # Build specific project with version tag"
+    echo "  just images build                       # Build all services or current project image"
+    echo "  just images build suaimi-dev            # Build specific service or project with auto tag"
+    echo "  just images build suaimi-dev container/compose.yml  # Build service with specific compose file"
+    echo "  just images build myapp v1.0.0          # Build specific project image with version tag"
+    echo "  just images build suaimi-dev \"\" \"\" true  # Build service with no-cache"
     echo "  just images push                        # Push current project latest build"
     echo "  just images push latest                 # Push current project as latest"
     echo "  just images list                        # List all images for current project"
-    echo ""
+    echo "  just images info                        # Show image information for current project"
+    echo "  just images info suaimi-dev             # Show container service information"
+    echo "  just images info suaimi-dev container/compose.yml  # Show service info with specific compose file"
 
-# Build project image with multi-architecture support
+# Build service(s) using docker-compose or image with multi-architecture support
 [no-cd]
-build project="" tag="":
+build service="" compose-file="" tag="" no-cache="":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    project="{{project}}"
+    service="{{service}}"
+    compose_file="{{compose-file}}"
     tag="{{tag}}"
+    no_cache="{{no-cache}}"
 
-    # Auto-discover project if not specified
-    if [ -z "$project" ]; then
-        echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
-        project=$(just _get_project_name)
-        echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
-    fi
+    # Check if this is container building (service/compose-file provided) or image building
+    if [ -n "$service" ] || [ -n "$compose_file" ]; then
+        # Container building mode
+        compose_cmd=$(just _detect_compose)
 
-    # Generate tag if not provided
-    if [ -z "$tag" ]; then
-        tag=$(just _generate_default_tag)
-    fi
+        # Auto-discover compose file if not provided
+        if [ -z "$compose_file" ]; then
+            compose_file=$(just _discover_compose_file)
+        fi
 
-    # Auto-discover containerfile
-    containerfile_info=$(just _discover_containerfile)
-    read -r containerfile project_name build_context <<< "$containerfile_info"
+        # Build compose file argument
+        file_arg=""
+        if [ -n "$compose_file" ]; then
+            file_arg="-f $compose_file"
+        fi
 
-    echo -e "{{GREEN}}✓ Found $containerfile{{NORMAL}}"
+        # Build no-cache argument
+        cache_arg=""
+        if [ "$no_cache" = "true" ]; then
+            cache_arg="--no-cache"
+        fi
 
-    # Build image
-    image_name=$(just _get_image_name "$tag")
-    echo -e "{{BLUE}}Building image: $image_name{{NORMAL}}"
-    echo -e "{{YELLOW}}Using: $containerfile{{NORMAL}}"
-    echo -e "{{YELLOW}}Build context: $build_context{{NORMAL}}"
-
-    # Detect platforms
-    platforms=$(just _detect_platforms "$containerfile")
-    echo -e "{{YELLOW}}Platforms: $platforms{{NORMAL}}"
-
-    runtime=$(just _detect_runtime)
-
-    # Parse platforms into array
-    IFS=',' read -ra PLATFORM_ARRAY <<< "$platforms"
-
-    # Remove any existing manifest or conflicting tags
-    $runtime manifest rm "$image_name" 2>/dev/null || true
-    $runtime rmi "$image_name" 2>/dev/null || true
-
-    # Build each platform
-    temp_tags=()
-    timestamp=$(date +%s)
-
-    for platform in "${PLATFORM_ARRAY[@]}"; do
-        echo -e "{{BLUE}}Building for platform: $platform{{NORMAL}}"
-
-        temp_tag="${image_name}-temp-${timestamp}-${platform//\//-}"
-        temp_tags+=("$temp_tag")
-
-        $runtime buildx build \
-            --platform "$platform" \
-            -f "$containerfile" \
-            -t "$temp_tag" \
-            --load \
-            "$build_context"
-    done
-
-    # Create final image (single or multi-platform)
-    if [ ${#PLATFORM_ARRAY[@]} -eq 1 ]; then
-        # Single platform - just tag the image
-        echo -e "{{BLUE}}Tagging single platform image{{NORMAL}}"
-        $runtime tag "${temp_tags[0]}" "$image_name"
+        if [ -n "$service" ]; then
+            echo -e "{{BLUE}}Building service: $service{{NORMAL}}"
+            if [ -n "$cache_arg" ]; then
+                echo -e "{{YELLOW}}Using no-cache mode{{NORMAL}}"
+            fi
+            $compose_cmd $file_arg build $cache_arg "$service"
+            echo -e "{{GREEN}}✓ Service $service built{{NORMAL}}"
+        else
+            echo -e "{{BLUE}}Building all services...{{NORMAL}}"
+            if [ -n "$cache_arg" ]; then
+                echo -e "{{YELLOW}}Using no-cache mode{{NORMAL}}"
+            fi
+            $compose_cmd $file_arg build $cache_arg
+            echo -e "{{GREEN}}✓ All services built{{NORMAL}}"
+        fi
     else
-        # Multi-platform - create manifest
-        echo -e "{{BLUE}}Creating multi-platform manifest{{NORMAL}}"
-        manifest_cmd="$runtime manifest create $image_name"
-        for temp_tag in "${temp_tags[@]}"; do
-            manifest_cmd="$manifest_cmd $temp_tag"
+        # Image building mode (original functionality)
+        project="$service"  # service parameter used as project for backward compatibility
+
+        # Auto-discover project if not specified
+        if [ -z "$project" ]; then
+            echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
+            project=$(just _get_project_name)
+            echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
+        fi
+
+        # Generate tag if not provided
+        if [ -z "$tag" ]; then
+            tag=$(just _generate_default_tag)
+        fi
+
+        # Auto-discover containerfile
+        containerfile_info=$(just _discover_containerfile)
+        read -r containerfile project_name build_context <<< "$containerfile_info"
+
+        echo -e "{{GREEN}}✓ Found $containerfile{{NORMAL}}"
+
+        # Build image
+        image_name=$(just _get_image_name "$tag")
+        echo -e "{{BLUE}}Building image: $image_name{{NORMAL}}"
+        echo -e "{{YELLOW}}Using: $containerfile{{NORMAL}}"
+        echo -e "{{YELLOW}}Build context: $build_context{{NORMAL}}"
+
+        # Detect platforms
+        platforms=$(just _detect_platforms "$containerfile")
+        echo -e "{{YELLOW}}Platforms: $platforms{{NORMAL}}"
+
+        runtime=$(just _detect_runtime)
+
+        # Parse platforms into array
+        IFS=',' read -ra PLATFORM_ARRAY <<< "$platforms"
+
+        # Remove any existing manifest or conflicting tags
+        $runtime manifest rm "$image_name" 2>/dev/null || true
+        $runtime rmi "$image_name" 2>/dev/null || true
+
+        # Build each platform
+        temp_tags=()
+        timestamp=$(date +%s)
+
+        for platform in "${PLATFORM_ARRAY[@]}"; do
+            echo -e "{{BLUE}}Building for platform: $platform{{NORMAL}}"
+
+            temp_tag="${image_name}-temp-${timestamp}-${platform//\//-}"
+            temp_tags+=("$temp_tag")
+
+            build_args=""
+            if [ "$no_cache" = "true" ]; then
+                build_args="--no-cache"
+                echo -e "{{YELLOW}}Using no-cache mode{{NORMAL}}"
+            fi
+
+            $runtime buildx build \
+                --platform "$platform" \
+                -f "$containerfile" \
+                -t "$temp_tag" \
+                --load \
+                $build_args \
+                "$build_context"
         done
-        eval "$manifest_cmd"
+
+        # Create final image (single or multi-platform)
+        if [ ${#PLATFORM_ARRAY[@]} -eq 1 ]; then
+            # Single platform - just tag the image
+            echo -e "{{BLUE}}Tagging single platform image{{NORMAL}}"
+            $runtime tag "${temp_tags[0]}" "$image_name"
+        else
+            # Multi-platform - create manifest
+            echo -e "{{BLUE}}Creating multi-platform manifest{{NORMAL}}"
+            manifest_cmd="$runtime manifest create $image_name"
+            for temp_tag in "${temp_tags[@]}"; do
+                manifest_cmd="$manifest_cmd $temp_tag"
+            done
+            eval "$manifest_cmd"
+        fi
+
+        # Keep platform images for manifest - don't clean up temp tags
+
+        echo -e "{{GREEN}}✓ Successfully built: $image_name{{NORMAL}}"
     fi
-
-    # Keep platform images for manifest - don't clean up temp tags
-
-    echo -e "{{GREEN}}✓ Successfully built: $image_name{{NORMAL}}"
 
 # Push project image to registry with smart latest handling
 [no-cd]
@@ -316,48 +372,105 @@ tag source_tag new_tag:
 
     echo -e "{{GREEN}}✓ Successfully tagged: $new_image{{NORMAL}}"
 
-# Show image information
+# Show image information or container service information
 [no-cd]
-info project="" tag="":
+info service="" compose-file="" tag="":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    project="{{project}}"
+    service="{{service}}"
+    compose_file="{{compose-file}}"
     tag="{{tag}}"
 
-    # Auto-discover project if not specified
-    if [ -z "$project" ]; then
-        echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
-        project=$(just _get_project_name)
-        echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
-    fi
+    # Check if this is container info (service/compose-file provided) or image info
+    if [ -n "$service" ] || [ -n "$compose_file" ]; then
+        # Container info mode
+        compose_cmd=$(just _detect_compose)
 
-    runtime=$(just _detect_runtime)
+        # Auto-discover compose file if not provided
+        if [ -z "$compose_file" ]; then
+            compose_file=$(just _discover_compose_file)
+        fi
 
-    if [ -n "$tag" ]; then
-        image_name=$(just _get_image_name "$tag")
+        # Build compose file argument
+        file_arg=""
+        if [ -n "$compose_file" ]; then
+            file_arg="-f $compose_file"
+        fi
+
+        echo ""
+        echo -e "{{BLUE}}Container Service Information{{NORMAL}}"
+        echo -e "{{YELLOW}}Compose file:{{NORMAL}} $compose_file"
+        echo ""
+
+        if [ -n "$service" ]; then
+            echo -e "{{BLUE}}Service details for: $service{{NORMAL}}"
+            echo ""
+
+            # Get service configuration
+            service_config=$($compose_cmd $file_arg config --services | grep "^$service$" || true)
+            if [ -z "$service_config" ]; then
+                echo -e "{{RED}}Service '$service' not found in compose file{{NORMAL}}"
+                echo -e "{{YELLOW}}Available services:{{NORMAL}}"
+                $compose_cmd $file_arg config --services
+                exit 1
+            fi
+
+            # Show service configuration
+            echo -e "{{CYAN}}Configuration:{{NORMAL}}"
+            $compose_cmd $file_arg config | sed -n "/^  $service:/,/^  [^ ]/p" | sed '$d' | sed 's/^/  /'
+        else
+            echo -e "{{BLUE}}All services in compose file:{{NORMAL}}"
+            echo ""
+            services=$($compose_cmd $file_arg config --services)
+            if [ -z "$services" ]; then
+                echo -e "{{YELLOW}}No services found in compose file{{NORMAL}}"
+            else
+                echo "$services" | while IFS= read -r svc; do
+                    echo -e "{{CYAN}}• $svc{{NORMAL}}"
+                done
+                echo ""
+                echo -e "{{YELLOW}}Use: just images info <service_name> to see detailed configuration{{NORMAL}}"
+            fi
+        fi
     else
-        image_name=$(just _get_image_name "")
-    fi
+        # Image info mode (original functionality)
+        project="$service"  # service parameter used as project for backward compatibility
 
-    echo ""
-    echo -e "{{BLUE}}Image information for: $image_name{{NORMAL}}"
-    echo ""
-    echo -e "{{BLUE}}Configuration:{{NORMAL}}"
-    echo -e "{{YELLOW}}Project:{{NORMAL}} $project"
-    echo -e "{{YELLOW}}Registry:{{NORMAL}} ${REGISTRY:-ghcr.io}"
-    echo -e "{{YELLOW}}Namespace:{{NORMAL}} ${REGISTRY_NAMESPACE:-${GITHUB_USERNAME:-'Not set'}}"
-    echo -e "{{YELLOW}}Image Name Override:{{NORMAL}} ${IMAGE_NAME:-'Not set'}"
-    echo -e "{{YELLOW}}Default Platforms:{{NORMAL}} ${DEFAULT_PLATFORMS:-linux/amd64,linux/arm64}"
-    echo ""
+        # Auto-discover project if not specified
+        if [ -z "$project" ]; then
+            echo -e "{{BLUE}}🔍 Auto-discovering project...{{NORMAL}}"
+            project=$(just _get_project_name)
+            echo -e "{{GREEN}}✓ Using project: $project{{NORMAL}}"
+        fi
 
-    # Show image details
-    if [ -n "$tag" ]; then
-        echo -e "{{BLUE}}Local image details:{{NORMAL}}"
-        $runtime images "$image_name" 2>/dev/null || echo "Image not found locally: $image_name"
-    else
-        echo -e "{{BLUE}}All project images:{{NORMAL}}"
-        $runtime images | grep "$image_name" 2>/dev/null || echo "No images found for project: $project"
+        runtime=$(just _detect_runtime)
+
+        if [ -n "$tag" ]; then
+            image_name=$(just _get_image_name "$tag")
+        else
+            image_name=$(just _get_image_name "")
+        fi
+
+        echo ""
+        echo -e "{{BLUE}}Image information for: $image_name{{NORMAL}}"
+        echo ""
+        echo -e "{{BLUE}}Configuration:{{NORMAL}}"
+        echo -e "{{YELLOW}}Project:{{NORMAL}} $project"
+        echo -e "{{YELLOW}}Registry:{{NORMAL}} ${REGISTRY:-ghcr.io}"
+        echo -e "{{YELLOW}}Namespace:{{NORMAL}} ${REGISTRY_NAMESPACE:-${GITHUB_USERNAME:-'Not set'}}"
+        echo -e "{{YELLOW}}Image Name Override:{{NORMAL}} ${IMAGE_NAME:-'Not set'}"
+        echo -e "{{YELLOW}}Default Platforms:{{NORMAL}} ${DEFAULT_PLATFORMS:-linux/amd64,linux/arm64}"
+        echo ""
+
+        # Show image details
+        if [ -n "$tag" ]; then
+            echo -e "{{BLUE}}Local image details:{{NORMAL}}"
+            $runtime images "$image_name" 2>/dev/null || echo "Image not found locally: $image_name"
+        else
+            echo -e "{{BLUE}}All project images:{{NORMAL}}"
+            $runtime images | grep "$image_name" 2>/dev/null || echo "No images found for project: $project"
+        fi
     fi
 
 # List all project images
