@@ -235,7 +235,7 @@ status service="" compose-file="":
 
 # View logs for specific service or all services
 [no-cd]
-logs service="" compose-file="":
+logs service="" compose-file="" follow="true":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -254,12 +254,17 @@ logs service="" compose-file="":
         file_arg="-f $compose_file"
     fi
 
+    follow_flag=""
+    if [ "{{follow}}" = "true" ]; then
+        follow_flag="-f"
+    fi
+
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Showing logs for: $service{{NORMAL}}"
-        $compose_cmd $file_arg logs -f "$service"
+        $compose_cmd $file_arg logs $follow_flag "$service"
     else
         echo -e "{{BLUE}}Showing logs for all services{{NORMAL}}"
-        $compose_cmd $file_arg logs -f
+        $compose_cmd $file_arg logs $follow_flag
     fi
 
 # Open shell in specific container
