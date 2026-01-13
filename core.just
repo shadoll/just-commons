@@ -183,9 +183,24 @@ _detect_runtime:
     fi
 
     # Auto-detect available runtime
+    # Check if docker exists, is not a symlink to podman, and daemon is running
     if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        echo "docker"
-    elif command -v podman >/dev/null 2>&1; then
+        # Check if docker is a symlink to podman
+        if [ -L "$(command -v docker)" ] && readlink "$(command -v docker)" | grep -q podman; then
+            # Docker is symlinked to podman, prefer podman
+            if command -v podman >/dev/null 2>&1; then
+                echo "podman"
+                exit 0
+            fi
+        else
+            # Real docker
+            echo "docker"
+            exit 0
+        fi
+    fi
+
+    # Check Podman as fallback
+    if command -v podman >/dev/null 2>&1; then
         echo "podman"
     else
         echo "Error: No container runtime available (docker or podman)" >&2
@@ -195,19 +210,25 @@ _detect_runtime:
 # Detect compose command based on available and working container runtime
 _detect_compose:
     #!/usr/bin/env bash
-    # Check Docker first - but make sure daemon is actually running
+    # Check Docker first - but make sure it's not symlinked to podman and daemon is actually running
     if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        # Docker daemon is running, check for compose
-        if docker compose version >/dev/null 2>&1; then
-            echo "docker compose"
-        elif command -v docker-compose >/dev/null 2>&1; then
-            echo "docker-compose"
-        else
-            echo "Error: Docker is running but no compose tool found" >&2
-            exit 1
+        # Check if docker is NOT a symlink to podman
+        if [ ! -L "$(command -v docker)" ] || ! readlink "$(command -v docker)" | grep -q podman; then
+            # Real Docker daemon is running, check for compose
+            if docker compose version >/dev/null 2>&1; then
+                echo "docker compose"
+            elif command -v docker-compose >/dev/null 2>&1; then
+                echo "docker-compose"
+            else
+                echo "Error: Docker is running but no compose tool found" >&2
+                exit 1
+            fi
+            exit 0
         fi
-    # Check Podman if Docker is not available or not running
-    elif command -v podman >/dev/null 2>&1; then
+    fi
+
+    # Check Podman if Docker is not available or is symlinked to podman
+    if command -v podman >/dev/null 2>&1; then
         if command -v podman-compose >/dev/null 2>&1; then
             echo "podman-compose"
         else
@@ -256,8 +277,13 @@ env-check:
     echo ""
 
     # Check Docker
+    docker_is_symlink=false
     if command -v docker >/dev/null 2>&1; then
-        if docker info >/dev/null 2>&1; then
+        if [ -L "$(command -v docker)" ] && readlink "$(command -v docker)" | grep -q podman; then
+            docker_is_symlink=true
+            echo -e "{{YELLOW}}⚠ Docker command is symlinked to Podman{{NORMAL}}"
+            docker_available=false  # Don't count symlink as real docker
+        elif docker info >/dev/null 2>&1; then
             echo -e "{{GREEN}}✓ Docker Engine detected and running{{NORMAL}}"
             docker_available=true
         else
@@ -276,6 +302,32 @@ env-check:
     else
         echo -e "{{RED}}✗ Podman not found{{NORMAL}}"
         podman_available=false
+    fi
+
+    echo ""
+    echo "================================================"
+    echo "  RUNTIME SELECTION"
+    echo "================================================"
+
+    # Determine which runtime will be used
+    detected_runtime=$(just _detect_runtime 2>/dev/null || echo "none")
+    detected_compose=$(just _detect_compose 2>/dev/null || echo "none")
+
+    if [ "$detected_runtime" = "podman" ]; then
+        echo -e "{{GREEN}}🎯 Using Podman as container runtime{{NORMAL}}"
+        if [ "$docker_is_symlink" = true ]; then
+            echo -e "{{BLUE}}   (Docker symlink detected, using Podman backend){{NORMAL}}"
+        fi
+    elif [ "$detected_runtime" = "docker" ]; then
+        echo -e "{{GREEN}}🎯 Using Docker as container runtime{{NORMAL}}"
+    else
+        echo -e "{{RED}}❌ No container runtime available{{NORMAL}}"
+    fi
+
+    if [ "$detected_compose" != "none" ]; then
+        echo -e "{{GREEN}}✓ Compose tool: $detected_compose{{NORMAL}}"
+    else
+        echo -e "{{RED}}✗ No compose tool available{{NORMAL}}"
     fi
 
     echo ""
