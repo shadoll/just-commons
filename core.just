@@ -183,25 +183,34 @@ _detect_runtime:
     fi
 
     # Auto-detect available runtime
-    # Check if docker exists, is not a symlink to podman, and daemon is running
-    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        # Check if docker is a symlink to podman
-        if [ -L "$(command -v docker)" ] && readlink "$(command -v docker)" | grep -q podman; then
-            # Docker is symlinked to podman, prefer podman
-            if command -v podman >/dev/null 2>&1; then
-                echo "podman"
-                exit 0
+    # Priority: real Docker daemon > podman > docker symlink to podman
+
+    # Check if docker command exists and is NOT a symlink to podman
+    if command -v docker >/dev/null 2>&1; then
+        docker_path=$(command -v docker)
+        # Check if it's a symlink pointing to podman
+        if [ -L "$docker_path" ]; then
+            docker_target=$(readlink "$docker_path")
+            if echo "$docker_target" | grep -q podman; then
+                # Docker is symlinked to podman, use podman directly
+                if command -v podman >/dev/null 2>&1; then
+                    echo "podman"
+                    exit 0
+                fi
             fi
         else
-            # Real docker
-            echo "docker"
-            exit 0
+            # Real docker binary, check if daemon is running
+            if docker info >/dev/null 2>&1; then
+                echo "docker"
+                exit 0
+            fi
         fi
     fi
 
     # Check Podman as fallback
     if command -v podman >/dev/null 2>&1; then
         echo "podman"
+        exit 0
     else
         echo "Error: No container runtime available (docker or podman)" >&2
         exit 1
@@ -210,33 +219,33 @@ _detect_runtime:
 # Detect compose command based on available and working container runtime
 _detect_compose:
     #!/usr/bin/env bash
-    # Check Docker first - but make sure it's not symlinked to podman and daemon is actually running
-    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        # Check if docker is NOT a symlink to podman
-        if [ ! -L "$(command -v docker)" ] || ! readlink "$(command -v docker)" | grep -q podman; then
-            # Real Docker daemon is running, check for compose
-            if docker compose version >/dev/null 2>&1; then
-                echo "docker compose"
-            elif command -v docker-compose >/dev/null 2>&1; then
-                echo "docker-compose"
-            else
-                echo "Error: Docker is running but no compose tool found" >&2
-                exit 1
-            fi
-            exit 0
-        fi
-    fi
 
-    # Check Podman if Docker is not available or is symlinked to podman
-    if command -v podman >/dev/null 2>&1; then
+    # Detect which runtime we're using
+    runtime=$(just _detect_runtime 2>/dev/null || echo "none")
+
+    if [ "$runtime" = "podman" ]; then
+        # Use podman-compose for podman
         if command -v podman-compose >/dev/null 2>&1; then
             echo "podman-compose"
+            exit 0
         else
-            echo "Error: Podman found but podman-compose not available" >&2
+            echo "Error: Podman detected but podman-compose not available" >&2
+            exit 1
+        fi
+    elif [ "$runtime" = "docker" ]; then
+        # Use docker compose for docker
+        if docker compose version >/dev/null 2>&1; then
+            echo "docker compose"
+            exit 0
+        elif command -v docker-compose >/dev/null 2>&1; then
+            echo "docker-compose"
+            exit 0
+        else
+            echo "Error: Docker is available but no compose tool found" >&2
             exit 1
         fi
     else
-        echo "Error: No container runtime (Docker or Podman) found" >&2
+        echo "Error: No container runtime detected" >&2
         exit 1
     fi
 
