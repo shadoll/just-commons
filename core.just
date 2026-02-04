@@ -261,6 +261,18 @@ _discover_compose_file:
         echo "docker-compose.yml"
     elif [ -f "docker-compose.yaml" ]; then
         echo "docker-compose.yaml"
+    elif [ -f "container/compose.dev.yml" ]; then
+        echo "container/compose.dev.yml"
+    elif [ -f "container/compose.dev.yaml" ]; then
+        echo "container/compose.dev.yaml"
+    elif [ -f "container/compose.test.yml" ]; then
+        echo "container/compose.test.yml"
+    elif [ -f "container/compose.test.yaml" ]; then
+        echo "container/compose.test.yaml"
+    elif [ -f "container/compose.prod.yml" ]; then
+        echo "container/compose.prod.yml"
+    elif [ -f "container/compose.prod.yaml" ]; then
+        echo "container/compose.prod.yaml"
     elif [ -f "container/compose.yml" ]; then
         echo "container/compose.yml"
     elif [ -f "container/compose.yaml" ]; then
@@ -270,6 +282,13 @@ _discover_compose_file:
     elif [ -f "container-compose.yaml" ]; then
         echo "container-compose.yaml"
     else
+        # Fallback: any file named container/compose.*.yml or .yaml
+        for f in container/compose.*.yml container/compose.*.yaml; do
+            if [ -f "$f" ]; then
+                echo "$f"
+                exit 0
+            fi
+        done
         echo ""
     fi
 
