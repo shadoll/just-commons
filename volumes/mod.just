@@ -37,7 +37,7 @@ default:
 
 # Clean all volumes used by compose file (DESTRUCTIVE!)
 [confirm]
-clean-all compose-file="":
+clean-all compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -50,19 +50,24 @@ clean-all compose-file="":
         file_arg="-f $compose_file"
     fi
 
+    project_arg=""
+    if [ -n "{{project}}" ]; then
+        project_arg="-p {{project}}"
+    fi
+
     echo -e "{{RED}}⚠️  WARNING: This will DELETE ALL DATA!{{NORMAL}}"
     echo -e "{{YELLOW}}This will remove all volumes defined in the compose file{{NORMAL}}"
 
     # Show which volumes would be removed
     echo -e "{{BLUE}}Volumes that will be removed:{{NORMAL}}"
-    $compose_cmd $file_arg config --volumes 2>/dev/null || echo "Cannot list volumes from compose file"
+    $compose_cmd $project_arg $file_arg config --volumes 2>/dev/null || echo "Cannot list volumes from compose file"
     echo ""
 
     echo -e "{{BLUE}}Stopping services...{{NORMAL}}"
-    $compose_cmd $file_arg down
+    $compose_cmd $project_arg $file_arg down
 
     echo -e "{{BLUE}}Removing volumes...{{NORMAL}}"
-    $compose_cmd $file_arg down -v
+    $compose_cmd $project_arg $file_arg down -v
 
     echo -e "{{GREEN}}✓ All volumes removed{{NORMAL}}"
 

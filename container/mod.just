@@ -48,13 +48,14 @@ default:
 
 # Start service (or all services if no service specified)
 [no-cd]
-start service="" compose-file="":
+start service="" compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -67,31 +68,38 @@ start service="" compose-file="":
         file_arg="-f $compose_file"
     fi
 
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
+    fi
+
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Starting service: $service{{NORMAL}}"
-        if ! $compose_cmd $file_arg up -d "$service" 2>&1; then
+        if ! $compose_cmd $project_arg $file_arg up -d "$service" 2>&1; then
             echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
             echo ""
             echo -e "{{YELLOW}}Available services:{{NORMAL}}"
-            $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+            $compose_cmd $project_arg $file_arg config --services 2>/dev/null || echo "Could not list services"
             exit 1
         fi
         echo -e "{{GREEN}}✓ Service $service started{{NORMAL}}"
     else
         echo -e "{{BLUE}}Starting all services...{{NORMAL}}"
-        $compose_cmd $file_arg up -d
+        $compose_cmd $project_arg $file_arg up -d
         echo -e "{{GREEN}}✓ All services started{{NORMAL}}"
     fi
 
 # Stop service (or all services if no service specified)
 [no-cd]
-stop service="" compose-file="":
+stop service="" compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -104,31 +112,38 @@ stop service="" compose-file="":
         file_arg="-f $compose_file"
     fi
 
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
+    fi
+
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Stopping service: $service{{NORMAL}}"
-        if ! $compose_cmd $file_arg stop "$service" 2>&1; then
+        if ! $compose_cmd $project_arg $file_arg stop "$service" 2>&1; then
             echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
             echo ""
             echo -e "{{YELLOW}}Available services:{{NORMAL}}"
-            $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+            $compose_cmd $project_arg $file_arg config --services 2>/dev/null || echo "Could not list services"
             exit 1
         fi
         echo -e "{{GREEN}}✓ Service $service stopped{{NORMAL}}"
     else
         echo -e "{{BLUE}}Stopping all services...{{NORMAL}}"
-        $compose_cmd $file_arg down
+        $compose_cmd $project_arg $file_arg down
         echo -e "{{GREEN}}✓ All services stopped{{NORMAL}}"
     fi
 
 # Restart service (or all services if no service specified)
 [no-cd]
-restart service="" compose-file="":
+restart service="" compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -139,42 +154,49 @@ restart service="" compose-file="":
     file_arg=""
     if [ -n "$compose_file" ]; then
         file_arg="-f $compose_file"
+    fi
+
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
     fi
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Restarting service: $service{{NORMAL}}"
 
         # Try to restart first
-        $compose_cmd $file_arg restart "$service" 2>/dev/null || true
+        $compose_cmd $project_arg $file_arg restart "$service" 2>/dev/null || true
 
         # Check if service is actually running after restart attempt
-        if $compose_cmd $file_arg ps "$service" 2>/dev/null | grep -q "Up"; then
+        if $compose_cmd $project_arg $file_arg ps "$service" 2>/dev/null | grep -q "Up"; then
             echo -e "{{GREEN}}✓ Service $service restarted{{NORMAL}}"
         else
             echo -e "{{YELLOW}}Service $service not running, starting instead...{{NORMAL}}"
-            if ! $compose_cmd $file_arg up -d "$service" 2>&1; then
+            if ! $compose_cmd $project_arg $file_arg up -d "$service" 2>&1; then
                 echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
                 echo ""
                 echo -e "{{YELLOW}}Available services:{{NORMAL}}"
-                $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+                $compose_cmd $project_arg $file_arg config --services 2>/dev/null || echo "Could not list services"
                 exit 1
             fi
             echo -e "{{GREEN}}✓ Service $service started{{NORMAL}}"
         fi
     else
-        just container stop "$service" "$compose_file"
-        just container start "$service" "$compose_file"
+        just container stop "$service" "$compose_file" "$project"
+        just container start "$service" "$compose_file" "$project"
     fi
 
 # Clean up service (or all services if no service specified) and remove orphans
 [no-cd]
-clean service="" compose-file="":
+clean service="" compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -187,31 +209,38 @@ clean service="" compose-file="":
         file_arg="-f $compose_file"
     fi
 
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
+    fi
+
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Cleaning up service: $service{{NORMAL}}"
-        if ! $compose_cmd $file_arg down "$service" --remove-orphans 2>&1; then
+        if ! $compose_cmd $project_arg $file_arg down "$service" --remove-orphans 2>&1; then
             echo -e "{{RED}}✗ Service '$service' not found{{NORMAL}}"
             echo ""
             echo -e "{{YELLOW}}Available services:{{NORMAL}}"
-            $compose_cmd $file_arg config --services 2>/dev/null || echo "Could not list services"
+            $compose_cmd $project_arg $file_arg config --services 2>/dev/null || echo "Could not list services"
             exit 1
         fi
         echo -e "{{GREEN}}✓ Service $service cleaned up{{NORMAL}}"
     else
         echo -e "{{BLUE}}Cleaning up all services and orphans...{{NORMAL}}"
-        $compose_cmd $file_arg down --remove-orphans
+        $compose_cmd $project_arg $file_arg down --remove-orphans
         echo -e "{{GREEN}}✓ All services and orphans cleaned up{{NORMAL}}"
     fi
 
 # Show service status (specific service or all)
 [no-cd]
-status service="" compose-file="":
+status service="" compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -222,26 +251,33 @@ status service="" compose-file="":
     file_arg=""
     if [ -n "$compose_file" ]; then
         file_arg="-f $compose_file"
+    fi
+
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
     fi
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Status for: $service{{NORMAL}}"
         # Filter output for specific service
-        $compose_cmd $file_arg ps | grep -E "(NAME|$service)" || echo "Service $service not found"
+        $compose_cmd $project_arg $file_arg ps | grep -E "(NAME|$service)" || echo "Service $service not found"
     else
         echo -e "{{BLUE}}Service Status:{{NORMAL}}"
-        $compose_cmd $file_arg ps
+        $compose_cmd $project_arg $file_arg ps
     fi
 
 # View logs for specific service or all services
 [no-cd]
-logs service="" compose-file="" follow="true":
+logs service="" compose-file="" follow="true" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -252,6 +288,12 @@ logs service="" compose-file="" follow="true":
     file_arg=""
     if [ -n "$compose_file" ]; then
         file_arg="-f $compose_file"
+    fi
+
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
     fi
 
     follow_flag=""
@@ -261,21 +303,22 @@ logs service="" compose-file="" follow="true":
 
     if [ -n "$service" ]; then
         echo -e "{{BLUE}}Showing logs for: $service{{NORMAL}}"
-        $compose_cmd $file_arg logs $follow_flag "$service"
+        $compose_cmd $project_arg $file_arg logs $follow_flag "$service"
     else
         echo -e "{{BLUE}}Showing logs for all services{{NORMAL}}"
-        $compose_cmd $file_arg logs $follow_flag
+        $compose_cmd $project_arg $file_arg logs $follow_flag
     fi
 
 # Open shell in specific container
 [no-cd]
-shell service compose-file="":
+shell service compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     compose_cmd=$(just _detect_compose)
     service="{{service}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -286,14 +329,20 @@ shell service compose-file="":
     file_arg=""
     if [ -n "$compose_file" ]; then
         file_arg="-f $compose_file"
+    fi
+
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
     fi
 
     echo -e "{{BLUE}}Opening shell in: $service{{NORMAL}}"
-    $compose_cmd $file_arg exec "$service" /bin/bash
+    $compose_cmd $project_arg $file_arg exec "$service" /bin/bash
 
 # Execute command in specific service container
 [no-cd]
-exec service cmd compose-file="":
+exec service cmd compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -301,6 +350,7 @@ exec service cmd compose-file="":
     service="{{service}}"
     cmd="{{cmd}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -311,14 +361,20 @@ exec service cmd compose-file="":
     file_arg=""
     if [ -n "$compose_file" ]; then
         file_arg="-f $compose_file"
+    fi
+
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
     fi
 
     echo -e "{{BLUE}}Executing in $service: $cmd{{NORMAL}}"
-    $compose_cmd $file_arg exec "$service" bash -c "$cmd"
+    $compose_cmd $project_arg $file_arg exec "$service" bash -c "$cmd"
 
 # Execute command in specific service container with piped input support
 [no-cd]
-exec-pipe service cmd compose-file="":
+exec-pipe service cmd compose-file="" project="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -326,6 +382,7 @@ exec-pipe service cmd compose-file="":
     service="{{service}}"
     cmd="{{cmd}}"
     compose_file="{{compose-file}}"
+    project="{{project}}"
 
     # Auto-discover compose file if not provided
     if [ -z "$compose_file" ]; then
@@ -338,5 +395,11 @@ exec-pipe service cmd compose-file="":
         file_arg="-f $compose_file"
     fi
 
+    # Build project name argument
+    project_arg=""
+    if [ -n "$project" ]; then
+        project_arg="-p $project"
+    fi
+
     echo -e "{{BLUE}}Executing in $service (with piped input): $cmd{{NORMAL}}"
-    $compose_cmd $file_arg exec -T "$service" bash -c "$cmd"
+    $compose_cmd $project_arg $file_arg exec -T "$service" bash -c "$cmd"
